@@ -2,11 +2,141 @@
 
 from __future__ import annotations
 
-from typing import Any
-
+from wasila.core.contracts import CustomerEvent
 from wasila.core.ports import CustomerGateway, OwnerGateway
 
 from wasila.gateways.webhook import WebhookCustomerGateway, WebhookOwnerGateway
+
+
+class TelegramCustomerGateway(WebhookCustomerGateway):
+    """Customer gateway adapter for Telegram payloads.
+
+    Stage 2 keeps Telegram transport compatible with webhook payload ingestion.
+    """
+
+    def __init__(self, metadata: dict[str, str] | None = None) -> None:
+        super().__init__(metadata=metadata)
+        self.name = "telegram"
+
+    def normalize(self, payload: dict) -> CustomerEvent:
+        raw_text = payload.get("message") or payload.get("text") or ""
+        if isinstance(payload.get("message"), dict):
+            raw_text = (
+                payload["message"].get("text")
+                or payload["message"].get("body")
+                or payload["message"].get("caption")
+                or raw_text
+            )
+
+        if not isinstance(raw_text, str):
+            raw_text = ""
+
+        event_id = payload.get("event_id")
+        if event_id is not None and not isinstance(event_id, str):
+            event_id = str(event_id)
+
+        sender = payload.get("from")
+        sender_id = ""
+        sender_name = ""
+        if isinstance(sender, dict):
+            sender_id = str(
+                sender.get("id")
+                or sender.get("username")
+                or sender.get("first_name")
+                or ""
+            )
+            sender_name = str(sender.get("first_name") or sender.get("username") or "")
+
+        return CustomerEvent(
+            gateway=payload.get("gateway", self.metadata.get("id", "telegram")),
+            gateway_role=payload.get("gateway_role", "customer"),
+            external_conversation_id=str(payload.get("chat", {}).get("id") or payload.get("conversation_id") or ""),
+            external_customer_id=str(payload.get("external_customer_id") or payload.get("customer_id") or sender_id or ""),
+            message_text=raw_text,
+            message_timestamp=payload.get("message_timestamp") or "",
+            id=event_id,
+            customer_id=payload.get("customer_id"),
+            metadata_json={
+                "name": sender_name or payload.get("name") or payload.get("display_name"),
+                "source": "telegram",
+                "raw": payload,
+            },
+        )
+
+
+class WhatsAppCustomerGateway(WebhookCustomerGateway):
+    """Customer gateway adapter for WhatsApp payloads.
+
+    Stage 2 keeps WhatsApp transport compatible with webhook payload ingestion.
+    """
+
+    def __init__(self, metadata: dict[str, str] | None = None) -> None:
+        super().__init__(metadata=metadata)
+        self.name = "whatsapp"
+
+    def normalize(self, payload: dict) -> CustomerEvent:
+        raw_text = payload.get("message") or payload.get("body") or ""
+        if isinstance(payload.get("entry"), list) and payload["entry"]:
+            first_entry = payload["entry"][0]
+            if isinstance(first_entry, dict):
+                raw_msg = None
+                changes = first_entry.get("changes")
+                if isinstance(changes, list) and changes:
+                    raw_msg = changes[0]
+                if isinstance(raw_msg, dict):
+                    value = raw_msg.get("value")
+                    if isinstance(value, dict):
+                        raw_msg = value.get("messages", [{}])[0] if isinstance(value.get("messages"), list) else raw_msg
+                if isinstance(raw_msg, dict):
+                    raw_text = (
+                        raw_msg.get("message")
+                        or raw_msg.get("text")
+                        or raw_msg.get("body")
+                        or raw_text
+                    )
+                    raw_meta_from = raw_msg.get("from") or first_entry.get("from")
+                    if isinstance(raw_msg, dict):
+                        payload["from"] = raw_msg.get("from", raw_meta_from)
+
+        if isinstance(raw_text, dict):
+            raw_text = ""
+        if not isinstance(raw_text, str):
+            raw_text = str(raw_text)
+
+        event_id = payload.get("event_id")
+        if event_id is not None and not isinstance(event_id, str):
+            event_id = str(event_id)
+
+        sender = payload.get("from")
+        sender_id = ""
+        sender_name = ""
+        if isinstance(sender, dict):
+            sender_id = str(
+                sender.get("id")
+                or sender.get("wa_id")
+                or sender.get("phone")
+                or sender.get("username")
+                or ""
+            )
+            sender_name = str(sender.get("name") or sender.get("profile_name") or sender_id)
+        else:
+            sender_id = str(sender or "")
+
+        return CustomerEvent(
+            gateway=payload.get("gateway", self.metadata.get("id", "whatsapp")),
+            gateway_role=payload.get("gateway_role", "customer"),
+            external_conversation_id=str(payload.get("conversation_id") or payload.get("wa_id") or sender_id or ""),
+            external_customer_id=str(payload.get("external_customer_id") or payload.get("customer_id") or sender_id or ""),
+            message_text=raw_text,
+            message_timestamp=payload.get("message_timestamp") or "",
+            id=event_id,
+            customer_id=payload.get("customer_id"),
+            metadata_json={
+                "name": sender_name or payload.get("name") or payload.get("display_name"),
+                "source": "whatsapp",
+                "raw": payload,
+            },
+        )
 
 
 class OpenClawOwnerGateway(WebhookOwnerGateway):
@@ -35,6 +165,10 @@ class HermesOwnerGateway(WebhookOwnerGateway):
 def build_customer_gateway(gateway_type: str, metadata: dict[str, str] | None = None) -> CustomerGateway:
     if gateway_type == "webhook":
         return WebhookCustomerGateway(metadata=metadata)
+    if gateway_type == "telegram":
+        return TelegramCustomerGateway(metadata=metadata)
+    if gateway_type == "whatsapp":
+        return WhatsAppCustomerGateway(metadata=metadata)
     raise ValueError(f"unsupported customer gateway type: {gateway_type}")
 
 
@@ -52,6 +186,8 @@ def build_owner_gateway(gateway_type: str, metadata: dict[str, str] | None = Non
 __all__ = [
     "WebhookCustomerGateway",
     "WebhookOwnerGateway",
+    "TelegramCustomerGateway",
+    "WhatsAppCustomerGateway",
     "OpenClawOwnerGateway",
     "HermesOwnerGateway",
     "build_customer_gateway",

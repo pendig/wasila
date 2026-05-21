@@ -44,6 +44,14 @@ wasila gateway add customer webhook
 
 Enables the first generic HTTP webhook gateway for customer conversations.
 
+Now supported customer gateway types are:
+
+```bash
+wasila gateway add customer webhook
+wasila gateway add customer telegram
+wasila gateway add customer whatsapp
+```
+
 ### Add Owner Gateway
 
 ```bash
@@ -60,6 +68,7 @@ wasila gateway add owner hermes
 ```
 
 OpenClaw and Hermes are configured as dedicated gateway types and currently resolve through the same webhook transport for bootstrap compatibility.
+Customer gateway expansion (`telegram`, `whatsapp`) is now supported in Stage 2 and currently shares the same webhook transport for bootstrap compatibility.
 
 ### Start Daemon
 

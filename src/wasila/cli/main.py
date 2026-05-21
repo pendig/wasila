@@ -72,7 +72,11 @@ def build_parser() -> argparse.ArgumentParser:
     gateway_sub = gateway_parser.add_subparsers(dest="gateway_command", required=True)
     gateway_add = gateway_sub.add_parser("add", help="Set gateway type and metadata.")
     gateway_add.add_argument("role", choices=["customer", "owner"])
-    gateway_add.add_argument("type", choices=["webhook", "openclaw", "hermes"])
+    gateway_add.add_argument(
+        "type",
+        choices=["webhook", "telegram", "whatsapp", "openclaw", "hermes"],
+        help="Gateway type to use for the selected role.",
+    )
     gateway_add.add_argument("--metadata", action="append", default=[], help="KEY=VALUE metadata")
     gateway_add.set_defaults(func=handle_gateway_add)
 
@@ -163,8 +167,10 @@ def handle_provider_set(args: argparse.Namespace) -> None:
 def handle_gateway_add(args: argparse.Namespace) -> None:
     config = _load_or_default(args.config)
     metadata = _parse_metadata_args(args.metadata)
-    if args.role == "customer" and args.type not in {"webhook"}:
-        raise SystemExit("customer gateway currently only supports webhook in Stage 1")
+    if args.role == "customer" and args.type not in {"webhook", "telegram", "whatsapp"}:
+        raise SystemExit("customer gateway only supports webhook, telegram, or whatsapp")
+    if args.role == "owner" and args.type not in {"webhook", "openclaw", "hermes"}:
+        raise SystemExit("owner gateway only supports webhook, openclaw, or hermes")
     if args.role == "customer":
         config.customer_gateway = GatewayConfig(
             type=args.type,
