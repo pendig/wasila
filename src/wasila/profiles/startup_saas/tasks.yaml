@@ -1,0 +1,20 @@
+triage_customer_message:
+  agent: front_office
+  description: Classify the customer message, identify missing context, and decide next action.
+  expected_output: A concise customer response and routing decision.
+
+manage_ticket:
+  agent: ticket_manager
+  description: Create or update ticket state, priority, and timeline when the conversation requires tracking.
+  expected_output: Ticket updates and ticket event notes when needed.
+
+handle_technical_support:
+  agent: technical_support
+  description: Help troubleshoot product, account, integration, and onboarding issues.
+  expected_output: Clear next step or clarifying question grounded in business knowledge.
+
+summarize_for_owner:
+  agent: owner
+  description: Create owner-facing summary when a customer situation needs attention.
+  expected_output: Risk level, summary, and recommended owner action.
+

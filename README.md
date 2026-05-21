@@ -63,6 +63,23 @@ wasila customer inspect cust_123
 wasila ticket list
 ```
 
+## Development
+
+The current scaffold can run locally without installing external runtime dependencies:
+
+```bash
+PYTHONPATH=src python3 -m wasila --help
+PYTHONPATH=src python3 -m wasila init startup_saas
+PYTHONPATH=src python3 -m wasila kb init
+PYTHONPATH=src python3 -m unittest discover -s tests
+```
+
+CrewAI is the default orchestration core for the MVP runner and is declared as an optional dependency group for the upcoming adapter:
+
+```bash
+pip install -e ".[crewai]"
+```
+
 ## Repository Direction
 
 Wasila should stay modular even while the MVP is small:
@@ -93,6 +110,7 @@ Useful starting points:
 - `docs/17-profile-template.md`
 - `docs/18-smoke-scenarios.md`
 - `docs/21-skills-and-execution.md`
+- `docs/23-crewai-alignment.md`
 
 ## Roadmap
 

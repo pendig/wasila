@@ -30,6 +30,7 @@ Done when:
 - Core interfaces exist for storage, orchestration, gateways, providers, profiles, skills, policies, knowledge, and customer memory.
 - The expected data directories and SQLite database are created.
 - Starter business knowledge files are created.
+- CrewAI remains an optional adapter dependency until the runner is implemented.
 
 ## Phase 2: Storage And Memory
 
@@ -90,8 +91,11 @@ Goals:
 - Implement the Wasila workflow lifecycle around the runner.
 - Load the `startup_saas` profile.
 - Load the profile template files.
+- Map Wasila profile YAML into CrewAI agents and tasks.
 - Run front office, ticket manager, technical support, and owner behavior.
 - Register MVP-safe skills for ticket updates, memory suggestions, and owner notifications.
+- Expose Wasila skills as CrewAI tools.
+- Load business knowledge into CrewAI knowledge sources where practical.
 - Apply memory update and owner notification policies.
 - Return a normalized `OrchestrationResult`.
 

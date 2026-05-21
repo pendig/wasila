@@ -124,7 +124,7 @@ Until approval tooling exists, the safe MVP behavior is to notify the owner and 
 
 ## Relationship To CrewAI
 
-CrewAI can expose Wasila skills as tools.
+CrewAI should expose Wasila skills as tools.
 
 Wasila should still own:
 
@@ -135,3 +135,11 @@ Wasila should still own:
 - Storage of skill results.
 
 This keeps tool behavior consistent even if orchestration internals change later.
+
+## CrewAI Tool Mapping
+
+When implementing the CrewAI runner, prefer CrewAI's tool primitives instead of creating a separate tool runtime.
+
+Wasila should wrap each approved skill as a CrewAI tool and keep permission checks around the tool execution.
+
+For risky actions, the tool should return a pending approval result instead of executing the external action.

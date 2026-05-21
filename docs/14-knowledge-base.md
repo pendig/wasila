@@ -67,6 +67,8 @@ For the MVP, load all Markdown knowledge into the orchestration context.
 
 This is simple, inspectable, and good enough for small businesses.
 
+When implementing the CrewAI runner, prefer CrewAI knowledge sources for retrieval instead of building a custom retrieval layer. Wasila should keep the source files local and editable, while the CrewAI adapter can convert them into supported CrewAI knowledge sources.
+
 Future versions can add:
 
 - Chunking.

@@ -12,6 +12,7 @@ Read these first:
 - `02-mvp-scope.md`: first profile, first gateways, first runtime, and MVP boundaries.
 - `03-architecture.md`: high-level module layout and contracts.
 - `22-architecture-boundaries.md`: modular boundaries for maintainable implementation.
+- `23-crewai-alignment.md`: how Wasila maps to CrewAI features instead of replacing them.
 - `10-mvp-implementation-plan.md`: phase-by-phase implementation checklist.
 
 ## Core Contracts

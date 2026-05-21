@@ -1,0 +1,30 @@
+ticket.create:
+  description: Create a customer ticket.
+  execution_level: write
+  approval_required: false
+
+ticket.update:
+  description: Update status, priority, or summary for an existing ticket.
+  execution_level: write
+  approval_required: false
+
+ticket.add_event:
+  description: Append a trace event to a ticket.
+  execution_level: write
+  approval_required: false
+
+memory.suggest_update:
+  description: Suggest a durable customer memory update.
+  execution_level: write
+  approval_required: false
+
+owner.notify:
+  description: Create an owner-facing notification.
+  execution_level: write
+  approval_required: false
+
+billing.issue_refund:
+  description: Issue a billing refund through an external system.
+  execution_level: external
+  approval_required: true
+

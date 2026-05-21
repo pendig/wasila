@@ -118,6 +118,8 @@ The Wasila workflow should own the full customer interaction lifecycle:
 
 CrewAI should participate in step 8. It should not own the full lifecycle.
 
+When CrewAI already provides a primitive for a step, prefer using it inside the relevant adapter. For example, use CrewAI agents/tasks/crews for orchestration, CrewAI tools for Wasila skills, CrewAI knowledge sources for business knowledge retrieval, and CrewAI Flows when the workflow lifecycle needs deterministic routing or persistence.
+
 ## Registry Model
 
 Wasila should prefer explicit registries over hardcoded branching.

@@ -1,0 +1,2 @@
+"""Wasila CLI package."""
+

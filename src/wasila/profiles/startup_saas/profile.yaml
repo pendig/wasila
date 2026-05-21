@@ -1,0 +1,17 @@
+id: startup_saas
+name: Startup SaaS
+description: Customer AI team for small software companies.
+required_agents:
+  - front_office
+  - ticket_manager
+  - technical_support
+  - owner
+default_customer_gateway: webhook
+default_owner_gateway: webhook
+allowed_skills:
+  - ticket.create
+  - ticket.update
+  - ticket.add_event
+  - memory.suggest_update
+  - owner.notify
+
