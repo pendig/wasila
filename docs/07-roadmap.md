@@ -18,6 +18,7 @@ Goals:
 Goals:
 
 - Create the Python package and CLI.
+- Define architecture boundaries, ports, adapters, registries, workflow lifecycle, and policy modules.
 - Implement `wasila init startup_saas`.
 - Create the initial SQLite schema.
 - Create customer memory files at `data/customers/{customer_id}/customer.md`.

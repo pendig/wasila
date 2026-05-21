@@ -75,13 +75,14 @@ Wasila should stay modular even while the MVP is small:
 - Skills let agents execute controlled, traceable actions.
 - The orchestration layer uses CrewAI by default while keeping Wasila's own interface stable.
 
-See the documentation in `docs/` for the MVP architecture and product decisions.
+See the documentation in `docs/` for the MVP architecture and product decisions. Start with `docs/README.md`.
 
 Useful starting points:
 
 - `docs/01-product-brief.md`
 - `docs/02-mvp-scope.md`
 - `docs/03-architecture.md`
+- `docs/22-architecture-boundaries.md`
 - `docs/05-data-model.md`
 - `docs/09-sandbox.md`
 - `docs/10-mvp-implementation-plan.md`
@@ -107,4 +108,21 @@ See `docs/07-roadmap.md` for the staged roadmap.
 
 ## Status
 
-Wasila is currently in docs-first MVP planning. The next step is to scaffold the CLI, profile format, SQLite schema, and the first CrewAI runner.
+Wasila is currently in docs-first MVP planning.
+
+Current phase:
+
+- Repository bootstrap is complete.
+- MVP docs and architecture contracts are drafted.
+- GitHub milestones and backlog issues are open.
+
+Next milestone:
+
+- Stage 1: Local CLI MVP.
+
+Backlog:
+
+- Issues: https://github.com/pendig/wasila/issues
+- Milestones: https://github.com/pendig/wasila/milestones
+
+The next implementation step is to scaffold the CLI, profile format, SQLite schema, and the first CrewAI runner.

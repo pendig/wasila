@@ -7,8 +7,11 @@ This plan keeps the first implementation small enough to finish while preserving
 Goals:
 
 - Create Python package structure.
+- Define core ports and adapters boundaries.
+- Add registry scaffolding for profiles, gateways, providers, skills, and runners.
 - Add CLI entrypoint.
 - Add basic local config loading.
+- Add config layering from profile defaults, project config, environment variables, and CLI flags.
 - Add `.env.example`.
 - Add SQLite initialization command.
 - Add business knowledge base initialization command.
@@ -24,6 +27,7 @@ wasila kb init
 Done when:
 
 - A new local project can be initialized.
+- Core interfaces exist for storage, orchestration, gateways, providers, profiles, skills, policies, knowledge, and customer memory.
 - The expected data directories and SQLite database are created.
 - Starter business knowledge files are created.
 
@@ -83,6 +87,7 @@ Done when:
 Goals:
 
 - Implement a CrewAI-backed orchestration runner.
+- Implement the Wasila workflow lifecycle around the runner.
 - Load the `startup_saas` profile.
 - Load the profile template files.
 - Run front office, ticket manager, technical support, and owner behavior.
@@ -93,6 +98,7 @@ Goals:
 Done when:
 
 - A sandbox customer message can produce an AI response and operational trace.
+- CrewAI owns orchestration execution but not the full workflow lifecycle.
 
 ## Phase 6: Webhook Gateway
 
