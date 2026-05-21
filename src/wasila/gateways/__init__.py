@@ -19,23 +19,27 @@ class TelegramCustomerGateway(WebhookCustomerGateway):
         self.name = "telegram"
 
     def normalize(self, payload: dict) -> CustomerEvent:
-        raw_text = payload.get("message") or payload.get("text") or ""
-        if isinstance(payload.get("message"), dict):
-            raw_text = (
-                payload["message"].get("text")
-                or payload["message"].get("body")
-                or payload["message"].get("caption")
-                or raw_text
-            )
+        message = payload.get("message")
+        raw_text = message if isinstance(message, str) else (
+            message.get("text")
+            if isinstance(message, dict)
+            else ""
+        )
+        if raw_text == "" and isinstance(message, dict):
+            raw_text = message.get("body") or message.get("caption") or ""
+        if raw_text == "":
+            raw_text = payload.get("text") or payload.get("body") or ""
 
         if not isinstance(raw_text, str):
             raw_text = ""
 
+        sender = payload.get("from")
+        if not isinstance(sender, dict):
+            sender = payload.get("sender")
+
         event_id = payload.get("event_id")
         if event_id is not None and not isinstance(event_id, str):
             event_id = str(event_id)
-
-        sender = payload.get("from")
         sender_id = ""
         sender_name = ""
         if isinstance(sender, dict):
@@ -76,27 +80,35 @@ class WhatsAppCustomerGateway(WebhookCustomerGateway):
 
     def normalize(self, payload: dict) -> CustomerEvent:
         raw_text = payload.get("message") or payload.get("body") or ""
+        raw_msg: dict | None = None
         if isinstance(payload.get("entry"), list) and payload["entry"]:
             first_entry = payload["entry"][0]
             if isinstance(first_entry, dict):
-                raw_msg = None
                 changes = first_entry.get("changes")
                 if isinstance(changes, list) and changes:
                     raw_msg = changes[0]
                 if isinstance(raw_msg, dict):
                     value = raw_msg.get("value")
                     if isinstance(value, dict):
-                        raw_msg = value.get("messages", [{}])[0] if isinstance(value.get("messages"), list) else raw_msg
+                        messages = value.get("messages")
+                        if isinstance(messages, list) and messages:
+                            raw_msg = messages[0]
                 if isinstance(raw_msg, dict):
-                    raw_text = (
-                        raw_msg.get("message")
-                        or raw_msg.get("text")
-                        or raw_msg.get("body")
-                        or raw_text
+                    text_candidate = (
+                        raw_msg.get("text")
+                        if isinstance(raw_msg.get("text"), str)
+                        else (
+                            raw_msg.get("text", {}).get("body")
+                            if isinstance(raw_msg.get("text"), dict)
+                            else None
+                        )
                     )
-                    raw_meta_from = raw_msg.get("from") or first_entry.get("from")
-                    if isinstance(raw_msg, dict):
-                        payload["from"] = raw_msg.get("from", raw_meta_from)
+                    if isinstance(text_candidate, str):
+                        raw_text = text_candidate
+                    else:
+                        raw_text = raw_msg.get("message") or raw_msg.get("body") or raw_text
+
+                    payload["from"] = raw_msg.get("from", first_entry.get("from"))
 
         if isinstance(raw_text, dict):
             raw_text = ""
