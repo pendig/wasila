@@ -36,6 +36,8 @@ class TelegramCustomerGateway(WebhookCustomerGateway):
         sender = payload.get("from")
         if not isinstance(sender, dict):
             sender = payload.get("sender")
+        if not isinstance(sender, dict) and isinstance(message, dict):
+            sender = message.get("from")
 
         event_id = payload.get("event_id")
         if event_id is not None and not isinstance(event_id, str):
@@ -54,7 +56,12 @@ class TelegramCustomerGateway(WebhookCustomerGateway):
         return CustomerEvent(
             gateway=payload.get("gateway", self.metadata.get("id", "telegram")),
             gateway_role=payload.get("gateway_role", "customer"),
-            external_conversation_id=str(payload.get("chat", {}).get("id") or payload.get("conversation_id") or ""),
+            external_conversation_id=str(
+                payload.get("external_conversation_id")
+                or (payload.get("chat") or {}).get("id")
+                or payload.get("conversation_id")
+                or ""
+            ),
             external_customer_id=str(payload.get("external_customer_id") or payload.get("customer_id") or sender_id or ""),
             message_text=raw_text,
             message_timestamp=payload.get("message_timestamp") or "",
@@ -120,6 +127,9 @@ class WhatsAppCustomerGateway(WebhookCustomerGateway):
             event_id = str(event_id)
 
         sender = payload.get("from")
+        if isinstance(raw_msg, dict) and isinstance(raw_msg.get("from"), dict):
+            sender = raw_msg.get("from")
+
         sender_id = ""
         sender_name = ""
         if isinstance(sender, dict):
@@ -134,10 +144,24 @@ class WhatsAppCustomerGateway(WebhookCustomerGateway):
         else:
             sender_id = str(sender or "")
 
+        if event_id is None and isinstance(raw_msg, dict):
+            msg_event_id = raw_msg.get("id")
+            if msg_event_id is not None and not isinstance(msg_event_id, str):
+                msg_event_id = str(msg_event_id)
+            if msg_event_id is not None:
+                event_id = msg_event_id
+
         return CustomerEvent(
             gateway=payload.get("gateway", self.metadata.get("id", "whatsapp")),
             gateway_role=payload.get("gateway_role", "customer"),
-            external_conversation_id=str(payload.get("conversation_id") or payload.get("wa_id") or sender_id or ""),
+            external_conversation_id=str(
+                payload.get("external_conversation_id")
+                or (raw_msg or {}).get("conversation")
+                or payload.get("conversation_id")
+                or payload.get("wa_id")
+                or sender_id
+                or ""
+            ),
             external_customer_id=str(payload.get("external_customer_id") or payload.get("customer_id") or sender_id or ""),
             message_text=raw_text,
             message_timestamp=payload.get("message_timestamp") or "",
