@@ -4,6 +4,8 @@ This plan keeps the first implementation small enough to finish while preserving
 
 ## Phase 1: Project Scaffold
 
+Status: ✅ completed.
+
 Goals:
 
 - Create Python package structure.
@@ -34,6 +36,8 @@ Done when:
 
 ## Phase 2: Storage And Memory
 
+Status: ✅ completed.
+
 Goals:
 
 - Implement SQLite migrations.
@@ -54,6 +58,8 @@ Done when:
 
 ## Phase 3: Event Contracts
 
+Status: ✅ completed.
+
 Goals:
 
 - Define `CustomerEvent`.
@@ -72,6 +78,8 @@ Done when:
 
 ## Phase 4: CLI Sandbox
 
+Status: ✅ completed.
+
 Goals:
 
 - Implement `wasila sandbox customer`.
@@ -84,6 +92,8 @@ Done when:
 - A contributor can test the full customer and owner loop without external gateways.
 
 ## Phase 5: CrewAI Runner
+
+Status: ✅ completed.
 
 Goals:
 
@@ -106,6 +116,8 @@ Done when:
 
 ## Phase 6: Webhook Gateway
 
+Status: ✅ completed.
+
 Goals:
 
 - Implement generic customer webhook input.
@@ -117,6 +129,8 @@ Done when:
 - A local daemon can receive a webhook customer message and emit owner notifications through webhook or sandbox inspection.
 
 ## Phase 7: MVP Smoke Test
+
+Status: ✅ completed with fallback-first runner available; webhook + sqlite + sandbox path.
 
 Goals:
 

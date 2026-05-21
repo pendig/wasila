@@ -1,9 +1,32 @@
 from __future__ import annotations
 
+import json
 import tomllib
 from pathlib import Path
 
 from wasila.config.models import GatewayConfig, ProjectConfig, ProviderSettings, RuntimeSettings
+
+
+def _as_metadata(value: object) -> dict[str, str]:
+    if not isinstance(value, dict):
+        return {}
+
+    output: dict[str, str] = {}
+    for key, value in value.items():
+        if isinstance(key, str) and isinstance(value, (str, int, float, bool)):
+            output[key] = str(value)
+    return output
+
+
+def _format_metadata(section_name: str, metadata: dict[str, str]) -> str:
+    if not metadata:
+        return ""
+
+    lines = [f"[{section_name}]", ""]
+    for key, value in sorted(metadata.items()):
+        escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+        lines.append(f"{key} = \"{escaped}\"")
+    return "\n".join(lines) + "\n"
 
 
 def load_config(path: Path) -> ProjectConfig:
@@ -12,6 +35,8 @@ def load_config(path: Path) -> ProjectConfig:
     runtime = data.get("runtime", {})
     provider = data.get("provider", {})
     gateways = data.get("gateways", {})
+    customer_gateway = gateways.get("customer", {}) if isinstance(gateways, dict) else {}
+    owner_gateway = gateways.get("owner", {}) if isinstance(gateways, dict) else {}
 
     return ProjectConfig(
         name=project.get("name", "my-customer-ai"),
@@ -27,30 +52,115 @@ def load_config(path: Path) -> ProjectConfig:
             model=provider.get("model", "openai/gpt-4.1-mini"),
             api_key_env=provider.get("api_key_env", "OPENAI_API_KEY"),
         ),
-        customer_gateway=GatewayConfig(type=gateways.get("customer", {}).get("type", "webhook")),
-        owner_gateway=GatewayConfig(type=gateways.get("owner", {}).get("type", "webhook")),
+        customer_gateway=GatewayConfig(
+            type=customer_gateway.get("type", "webhook"),
+            metadata=_as_metadata(customer_gateway.get("metadata", {})),
+        ),
+        owner_gateway=GatewayConfig(
+            type=owner_gateway.get("type", "webhook"),
+            metadata=_as_metadata(owner_gateway.get("metadata", {})),
+        ),
     )
 
 
 def dump_config(config: ProjectConfig) -> str:
-    return f"""[project]
-name = "{config.name}"
-profile = "{config.profile}"
+    customer_metadata = _format_metadata(
+        "gateways.customer.metadata",
+        config.customer_gateway.metadata,
+    )
+    owner_metadata = _format_metadata(
+        "gateways.owner.metadata",
+        config.owner_gateway.metadata,
+    )
 
-[runtime]
-database_path = "{config.runtime.database_path}"
-customer_memory_dir = "{config.runtime.customer_memory_dir}"
-knowledge_dir = "{config.runtime.knowledge_dir}"
+    lines = [
+        "[project]",
+        f'name = "{config.name}"',
+        f'profile = "{config.profile}"',
+        "",
+        "[runtime]",
+        f'database_path = "{config.runtime.database_path}"',
+        f'customer_memory_dir = "{config.runtime.customer_memory_dir}"',
+        f'knowledge_dir = "{config.runtime.knowledge_dir}"',
+        "",
+        "[provider]",
+        f'type = "{config.provider.type}"',
+        f'base_url = "{config.provider.base_url}"',
+        f'model = "{config.provider.model}"',
+        f'api_key_env = "{config.provider.api_key_env}"',
+        "",
+        "[gateways.customer]",
+        f'type = "{config.customer_gateway.type}"',
+        "",
+        "[gateways.owner]",
+        f'type = "{config.owner_gateway.type}"',
+    ]
 
-[provider]
-type = "{config.provider.type}"
-base_url = "{config.provider.base_url}"
-model = "{config.provider.model}"
-api_key_env = "{config.provider.api_key_env}"
+    body = "\n".join(lines)
+    if customer_metadata:
+        body += "\n\n" + customer_metadata.rstrip("\n")
+    if owner_metadata:
+        body += "\n\n" + owner_metadata.rstrip("\n")
 
-[gateways.customer]
-type = "{config.customer_gateway.type}"
+    return body + "\n"
 
-[gateways.owner]
-type = "{config.owner_gateway.type}"
-"""
+
+def config_overrides_from_env() -> dict[str, dict[str, str]]:
+    """Return non-empty environment overrides in Wasila's standard schema."""
+
+    import os
+
+    overrides: dict[str, dict[str, str]] = {
+        "project": {},
+        "provider": {},
+        "runtime": {},
+        "gateways.customer": {},
+        "gateways.owner": {},
+        "gateways.customer.metadata": {},
+        "gateways.owner.metadata": {},
+    }
+
+    mapping: dict[str, tuple[str, str]] = {
+        "WASILA_PROJECT_NAME": ("project", "name"),
+        "WASILA_PROJECT_PROFILE": ("project", "profile"),
+        "WASILA_RUNTIME_DATABASE_PATH": ("runtime", "database_path"),
+        "WASILA_RUNTIME_CUSTOMER_MEMORY_DIR": ("runtime", "customer_memory_dir"),
+        "WASILA_RUNTIME_KNOWLEDGE_DIR": ("runtime", "knowledge_dir"),
+        "WASILA_PROVIDER_TYPE": ("provider", "type"),
+        "WASILA_PROVIDER_BASE_URL": ("provider", "base_url"),
+        "WASILA_PROVIDER_MODEL": ("provider", "model"),
+        "WASILA_PROVIDER_API_KEY_ENV": ("provider", "api_key_env"),
+        "WASILA_GATEWAY_CUSTOMER_TYPE": ("gateways.customer", "type"),
+        "WASILA_GATEWAY_OWNER_TYPE": ("gateways.owner", "type"),
+        "WASILA_GATEWAY_CUSTOMER_URL": ("gateways.customer.metadata", "url"),
+        "WASILA_GATEWAY_OWNER_URL": ("gateways.owner.metadata", "url"),
+    }
+
+    for env_name, (section, key) in mapping.items():
+        value = os.getenv(env_name)
+        if value:
+            overrides[section][key] = value
+
+    metadata_raw = os.getenv("WASILA_GATEWAY_CUSTOMER_METADATA")
+    if metadata_raw:
+        try:
+            parsed = json.loads(metadata_raw)
+            if isinstance(parsed, dict):
+                for key, value in parsed.items():
+                    if isinstance(key, str):
+                        overrides["gateways.customer.metadata"][key] = str(value)
+        except json.JSONDecodeError:
+            pass
+
+    metadata_raw = os.getenv("WASILA_GATEWAY_OWNER_METADATA")
+    if metadata_raw:
+        try:
+            parsed = json.loads(metadata_raw)
+            if isinstance(parsed, dict):
+                for key, value in parsed.items():
+                    if isinstance(key, str):
+                        overrides["gateways.owner.metadata"][key] = str(value)
+        except json.JSONDecodeError:
+            pass
+
+    return {section: values for section, values in overrides.items() if values}

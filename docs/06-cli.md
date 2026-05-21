@@ -52,12 +52,14 @@ wasila gateway add owner webhook
 
 Enables owner-facing summaries and escalation notifications through a webhook.
 
-Future owner gateway targets should include:
+Current owner gateway options in Stage 1:
 
 ```bash
 wasila gateway add owner openclaw
 wasila gateway add owner hermes
 ```
+
+OpenClaw and Hermes are configured as dedicated gateway types and currently resolve through the same webhook transport for bootstrap compatibility.
 
 ### Start Daemon
 

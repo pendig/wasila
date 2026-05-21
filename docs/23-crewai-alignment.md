@@ -86,15 +86,19 @@ If CrewAI does not provide it:
 - Keep it behind a port or adapter.
 - Document why the custom layer exists.
 
-## Current Base Scaffold
+## Current Alignment Status
 
-The current scaffold intentionally defines Wasila contracts and CLI setup first. It does not implement the CrewAI runner yet.
+Wasila now implements CrewAI as the Stage 1 default runner behind the `Orchestrator` port, with a fallback path for local-only environments where CrewAI is not configured.
 
-The next CrewAI-facing implementation should:
+Current capabilities:
 
-- Add the CrewAI adapter behind the `Orchestrator` port.
-- Convert profile YAML into CrewAI agents and tasks.
-- Convert provider config into CrewAI `LLM(...)` objects.
-- Expose Wasila skills as CrewAI tools.
-- Load business knowledge into CrewAI knowledge sources.
-- Return a normalized `OrchestrationResult`.
+- Build `LLM(...)` from OpenAI-compatible provider settings.
+- Load the configured profile and pass business knowledge into orchestration prompts.
+- Return `OrchestrationResult` into the Wasila workflow for persistence and policy checks.
+- Persist agent runs and skill calls through the same storage layer.
+
+The next CrewAI-facing improvements are intentionally deferred:
+
+- Convert profile YAML directly into production-grade multi-agent task graphs.
+- Register Wasila skills as first-class CrewAI tools.
+- Add CrewAI-native output structuring for richer deterministic schemas.

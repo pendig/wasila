@@ -126,21 +126,19 @@ See `docs/07-roadmap.md` for the staged roadmap.
 
 ## Status
 
-Wasila is currently in docs-first MVP planning.
+Wasila is now in **Stage 1: Local CLI MVP (implemented and runnable)**.
 
-Current phase:
+What already works:
 
-- Repository bootstrap is complete.
-- MVP docs and architecture contracts are drafted.
-- GitHub milestones and backlog issues are open.
-
-Next milestone:
-
-- Stage 1: Local CLI MVP.
+- `wasila init`, `wasila kb init`, provider and gateway config commands.
+- SQLite bootstrap and schema migrations.
+- Customer memory directory and knowledge file bootstrap.
+- Webhook daemon + idempotent customer message handling.
+- Customer and owner CLI sandbox.
+- Customer inspect and ticket list commands.
+- CrewAI-first orchestration runner with SQLite-backed workflow, policy checks, and skill trace persistence.
 
 Backlog:
 
 - Issues: https://github.com/pendig/wasila/issues
 - Milestones: https://github.com/pendig/wasila/milestones
-
-The next implementation step is to scaffold the CLI, profile format, SQLite schema, and the first CrewAI runner.

@@ -4,7 +4,7 @@ This roadmap is intentionally staged. Wasila should first prove a useful local c
 
 ## Stage 0: Docs-First MVP Definition
 
-Status: in progress.
+Status: ✅ completed.
 
 Goals:
 
@@ -14,6 +14,8 @@ Goals:
 - Define profile, gateway, provider, storage, and owner-loop boundaries.
 
 ## Stage 1: Local CLI MVP
+
+Status: ✅ implemented and smoke-tested.
 
 Goals:
 

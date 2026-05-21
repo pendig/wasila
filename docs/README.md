@@ -2,7 +2,7 @@
 
 This directory is the product and implementation guide for Wasila.
 
-Wasila is currently in docs-first MVP planning. The first implementation target is Stage 1: Local CLI MVP.
+Wasila has completed Stage 1: Local CLI MVP and keeps docs organized around that baseline.
 
 ## Start Here
 

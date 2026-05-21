@@ -80,10 +80,12 @@ class SkillResult:
     skill_name: str
     status: Literal["success", "failed", "pending_approval", "skipped"]
     approval_status: Literal["not_required", "pending", "approved", "rejected"]
+    input_json: JSONDict = field(default_factory=dict)
     output_json: JSONDict = field(default_factory=dict)
     skill_call_id: str | None = None
     id: str | None = None
     error: str | None = None
+    metadata_json: JSONDict = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -108,4 +110,3 @@ class OrchestrationResult:
     skill_results: list[SkillResult] = field(default_factory=list)
     agent_runs: list[AgentRun] = field(default_factory=list)
     metadata_json: JSONDict = field(default_factory=dict)
-

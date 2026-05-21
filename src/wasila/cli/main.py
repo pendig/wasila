@@ -1,15 +1,25 @@
 from __future__ import annotations
 
 import argparse
-import sqlite3
+import json
 from pathlib import Path
+from typing import Any
+from uuid import uuid4
 
 from wasila import __version__
+from wasila.app import load_project
 from wasila.config.defaults import default_config
-from wasila.config.toml_io import dump_config
+from wasila.config.layers import load_config_with_layers
+from wasila.config.models import GatewayConfig, ProjectConfig, ProviderSettings
+from wasila.config.toml_io import dump_config, load_config
+from wasila.core.contracts import CustomerEvent
+from wasila.core.workflow import _build_dedup_event_id
+from wasila.gateways import build_customer_gateway
+from wasila.gateways.webhook import WebhookDaemon
+from wasila.storage import SqliteStorage
+from wasila.storage.file import CustomerMarkdownStore
 
-CONFIG_DIR = ".wasila"
-CONFIG_PATH = Path(CONFIG_DIR) / "config.toml"
+CONFIG_PATH = Path(".wasila") / "config.toml"
 
 KNOWLEDGE_FILES = {
     "business.md": "# Business\n\n## Overview\n\n## Audience\n\n## Brand Voice\n\n## Contact Rules\n",
@@ -18,101 +28,6 @@ KNOWLEDGE_FILES = {
     "support.md": "# Support\n\n## Common Questions\n\n## Troubleshooting\n\n## Known Issues\n\n## Boundaries\n",
     "owner.md": "# Owner Preferences\n\n## Summary Format\n\n## Escalation Preferences\n\n## Approval Requirements\n\n## Sensitive Topics\n",
 }
-
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS schema_migrations (
-  version INTEGER PRIMARY KEY,
-  applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS customers (
-  id TEXT PRIMARY KEY,
-  display_name TEXT,
-  primary_channel TEXT,
-  external_refs_json TEXT NOT NULL DEFAULT '{}',
-  metadata_json TEXT NOT NULL DEFAULT '{}',
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS messages (
-  id TEXT PRIMARY KEY,
-  event_id TEXT,
-  customer_id TEXT,
-  ticket_id TEXT,
-  gateway TEXT NOT NULL,
-  direction TEXT NOT NULL,
-  body TEXT NOT NULL,
-  metadata_json TEXT NOT NULL DEFAULT '{}',
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE(gateway, event_id)
-);
-
-CREATE TABLE IF NOT EXISTS tickets (
-  id TEXT PRIMARY KEY,
-  customer_id TEXT NOT NULL,
-  title TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'open',
-  priority TEXT NOT NULL DEFAULT 'medium',
-  owner_agent TEXT,
-  summary TEXT,
-  metadata_json TEXT NOT NULL DEFAULT '{}',
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS ticket_events (
-  id TEXT PRIMARY KEY,
-  ticket_id TEXT NOT NULL,
-  actor_type TEXT NOT NULL,
-  actor_name TEXT NOT NULL,
-  event_type TEXT NOT NULL,
-  body TEXT NOT NULL,
-  metadata_json TEXT NOT NULL DEFAULT '{}',
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS agent_runs (
-  id TEXT PRIMARY KEY,
-  customer_id TEXT,
-  ticket_id TEXT,
-  profile TEXT NOT NULL,
-  agent_name TEXT NOT NULL,
-  task_name TEXT NOT NULL,
-  status TEXT NOT NULL,
-  input_json TEXT NOT NULL DEFAULT '{}',
-  output_json TEXT NOT NULL DEFAULT '{}',
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS owner_summaries (
-  id TEXT PRIMARY KEY,
-  customer_id TEXT NOT NULL,
-  ticket_id TEXT,
-  summary TEXT NOT NULL,
-  risk_level TEXT NOT NULL DEFAULT 'low',
-  recommended_action TEXT,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS skill_executions (
-  id TEXT PRIMARY KEY,
-  customer_id TEXT,
-  ticket_id TEXT,
-  agent_run_id TEXT,
-  skill_name TEXT NOT NULL,
-  execution_level TEXT NOT NULL,
-  approval_required INTEGER NOT NULL DEFAULT 0,
-  approval_status TEXT NOT NULL DEFAULT 'not_required',
-  input_json TEXT NOT NULL DEFAULT '{}',
-  output_json TEXT NOT NULL DEFAULT '{}',
-  status TEXT NOT NULL,
-  error TEXT,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-INSERT OR IGNORE INTO schema_migrations (version) VALUES (1);
-"""
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -124,6 +39,12 @@ def main(argv: list[str] | None = None) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="wasila", description="Customer AI orchestration kit.")
     parser.add_argument("--version", action="version", version=f"wasila {__version__}")
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=CONFIG_PATH,
+        help="Path to .wasila/config.toml",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     init_parser = subparsers.add_parser("init", help="Initialize a Wasila project.")
@@ -138,26 +59,71 @@ def build_parser() -> argparse.ArgumentParser:
     kb_init.add_argument("--force", action="store_true", help="Overwrite existing knowledge files.")
     kb_init.set_defaults(func=handle_kb_init)
 
+    provider_parser = subparsers.add_parser("provider", help="Manage LLM provider config.")
+    provider_sub = provider_parser.add_subparsers(dest="provider_command", required=True)
+    provider_set = provider_sub.add_parser("set", help="Set provider configuration.")
+    provider_set.add_argument("type", choices=["openai-compatible"])
+    provider_set.add_argument("--base-url", required=True)
+    provider_set.add_argument("--model", required=True)
+    provider_set.add_argument("--api-key-env", required=True)
+    provider_set.set_defaults(func=handle_provider_set)
+
+    gateway_parser = subparsers.add_parser("gateway", help="Manage gateway config.")
+    gateway_sub = gateway_parser.add_subparsers(dest="gateway_command", required=True)
+    gateway_add = gateway_sub.add_parser("add", help="Set gateway type and metadata.")
+    gateway_add.add_argument("role", choices=["customer", "owner"])
+    gateway_add.add_argument("type", choices=["webhook", "openclaw", "hermes"])
+    gateway_add.add_argument("--metadata", action="append", default=[], help="KEY=VALUE metadata")
+    gateway_add.set_defaults(func=handle_gateway_add)
+
+    daemon_parser = subparsers.add_parser("daemon", help="Start the local event daemon.")
+    daemon_sub = daemon_parser.add_subparsers(dest="daemon_command", required=True)
+    daemon_start = daemon_sub.add_parser("start", help="Start webhook daemon.")
+    daemon_start.add_argument("--host", default="127.0.0.1")
+    daemon_start.add_argument("--port", type=int, default=8000)
+    daemon_start.add_argument("--customer-gateway", default=None, help="Override runtime customer gateway type.")
+    daemon_start.add_argument("--owner-gateway", default=None, help="Override runtime owner gateway type.")
+    daemon_start.set_defaults(func=handle_daemon_start)
+
+    sandbox_parser = subparsers.add_parser("sandbox", help="Run sandbox sessions.")
+    sandbox_sub = sandbox_parser.add_subparsers(dest="sandbox_command", required=True)
+    sandbox_customer = sandbox_sub.add_parser("customer", help="Interactive customer session.")
+    sandbox_customer.add_argument("--customer-id", help="Existing customer id.")
+    sandbox_customer.add_argument("--new", help="New customer display name.")
+    sandbox_customer.set_defaults(func=handle_sandbox_customer)
+    sandbox_owner = sandbox_sub.add_parser("owner", help="Inspect latest owner notifications.")
+    sandbox_owner.add_argument("--limit", type=int, default=10)
+    sandbox_owner.set_defaults(func=handle_sandbox_owner)
+
+    customer_parser = subparsers.add_parser("customer", help="Inspect a customer.")
+    customer_parser.add_argument("customer_id", help="Customer ID")
+    customer_parser.set_defaults(func=handle_customer_inspect)
+
+    ticket_parser = subparsers.add_parser("ticket", help="Inspect tickets.")
+    ticket_sub = ticket_parser.add_subparsers(dest="ticket_command", required=True)
+    ticket_list = ticket_sub.add_parser("list", help="List tickets.")
+    ticket_list.add_argument("--status", default=None)
+    ticket_list.set_defaults(func=handle_ticket_list)
+
     return parser
 
 
 def handle_init(args: argparse.Namespace) -> None:
-    if args.profile != "startup_saas":
-        raise SystemExit(f"Unsupported MVP profile: {args.profile}")
-
     config = default_config(project_name=args.name, profile=args.profile)
-    Path(CONFIG_DIR).mkdir(exist_ok=True)
-    Path(config.runtime.customer_memory_dir).mkdir(parents=True, exist_ok=True)
-    Path(config.runtime.knowledge_dir).mkdir(parents=True, exist_ok=True)
-    Path(config.runtime.database_path).parent.mkdir(parents=True, exist_ok=True)
+    args.config.parent.mkdir(parents=True, exist_ok=True)
+    runtime = config.runtime
+    Path(runtime.customer_memory_dir).mkdir(parents=True, exist_ok=True)
+    Path(runtime.knowledge_dir).mkdir(parents=True, exist_ok=True)
+    Path(runtime.database_path).parent.mkdir(parents=True, exist_ok=True)
 
-    if CONFIG_PATH.exists() and not args.force:
-        print(f"Config already exists: {CONFIG_PATH}")
+    if args.config.exists() and not args.force:
+        print(f"Config already exists: {args.config}")
     else:
-        CONFIG_PATH.write_text(dump_config(config), encoding="utf-8")
-        print(f"Created config: {CONFIG_PATH}")
+        args.config.write_text(dump_config(config), encoding="utf-8")
+        print(f"Created config: {args.config}")
 
-    initialize_sqlite(Path(config.runtime.database_path))
+    storage = SqliteStorage(config.runtime)
+    storage.initialize()
     print(f"Initialized database: {config.runtime.database_path}")
     print("Next: wasila kb init")
 
@@ -182,7 +148,171 @@ def handle_kb_init(args: argparse.Namespace) -> None:
         print(f"Skipped existing knowledge file: {path}")
 
 
-def initialize_sqlite(path: Path) -> None:
-    with sqlite3.connect(path) as connection:
-        connection.executescript(SCHEMA)
+def handle_provider_set(args: argparse.Namespace) -> None:
+    config = _load_or_default(args.config)
+    config.provider = ProviderSettings(
+        type=args.type,
+        base_url=args.base_url,
+        model=args.model,
+        api_key_env=args.api_key_env,
+    )
+    _write_config(args.config, config)
+    print(f"Updated provider in {args.config}")
 
+
+def handle_gateway_add(args: argparse.Namespace) -> None:
+    config = _load_or_default(args.config)
+    metadata = _parse_metadata_args(args.metadata)
+    if args.role == "customer" and args.type not in {"webhook"}:
+        raise SystemExit("customer gateway currently only supports webhook in Stage 1")
+    if args.role == "customer":
+        config.customer_gateway = GatewayConfig(
+            type=args.type,
+            metadata={**config.customer_gateway.metadata, **metadata},
+        )
+    else:
+        config.owner_gateway = GatewayConfig(
+            type=args.type,
+            metadata={**config.owner_gateway.metadata, **metadata},
+        )
+    _write_config(args.config, config)
+    print(f"Updated {args.role} gateway in {args.config}")
+
+
+def handle_daemon_start(args: argparse.Namespace) -> None:
+    config, _, workflow = load_project(
+        config_path=args.config,
+        customer_gateway_runtime=args.customer_gateway,
+        owner_gateway_runtime=args.owner_gateway,
+    )
+    gateway = build_customer_gateway(
+        config.customer_gateway.type,
+        config.customer_gateway.metadata,
+    )
+
+    def process(event_payload: dict[str, Any]) -> dict[str, Any]:
+        event = gateway.normalize(event_payload)
+        result = workflow.run(event)
+        return {
+            "customer_response": result.customer_response,
+            "metadata": result.metadata_json,
+            "customer_id": event.customer_id,
+            "gateway": event.gateway,
+        }
+
+    daemon = WebhookDaemon(handler=process, gateway=gateway, host=args.host, port=args.port)
+    daemon.start()
+
+
+def handle_sandbox_customer(args: argparse.Namespace) -> None:
+    _, _, workflow = load_project(config_path=args.config)
+    conversation_id = f"sbx_{uuid4().hex[:10]}"
+    customer_id = args.customer_id
+    ext_customer = customer_id or f"sbx_{uuid4().hex[:8]}"
+    display_name = args.new
+    print("Customer sandbox started. Press Enter on empty input to exit.")
+
+    while True:
+        text = input("customer> ").strip()
+        if not text:
+            break
+
+        event = CustomerEvent(
+            gateway="sandbox",
+            external_conversation_id=conversation_id,
+            external_customer_id=ext_customer,
+            message_text=text,
+            customer_id=customer_id,
+            metadata_json={"display_name": display_name, "name": display_name},
+        )
+        event.id = _build_dedup_event_id(event)
+        result = workflow.run(event)
+
+        if customer_id is None:
+            customer_id = result.metadata_json.get("customer_id") or event.customer_id
+            if customer_id:
+                ext_customer = customer_id
+        if customer_id:
+            event.customer_id = customer_id
+
+        ticket_ref = ", ".join(result.metadata_json.get("ticket_ids", [])) or "none"
+        owner_ref = ", ".join(result.metadata_json.get("owner_summary_ids", [])) or "none"
+        print(f"\nassistant> {result.customer_response}")
+        print(f"customer_id={event.customer_id} tickets={ticket_ref} owner_notifications={owner_ref}")
+        print("-" * 40)
+
+
+def handle_sandbox_owner(args: argparse.Namespace) -> None:
+    config, _, _ = load_project(config_path=args.config)
+    storage = SqliteStorage(config.runtime)
+    storage.initialize()
+    summaries = storage.list_owner_summaries(limit=args.limit)
+
+    if not summaries:
+        print("No owner summaries yet.")
+        return
+
+    for summary in summaries:
+        print(
+            f"[{summary.get('risk_level')}] ticket={summary.get('ticket_id')} customer={summary.get('customer_id')} id={summary.get('id')}"
+        )
+        print(f"  {summary.get('summary')}")
+        print(f"  action={summary.get('recommended_action')}")
+
+
+def handle_customer_inspect(args: argparse.Namespace) -> None:
+    config = load_config_with_layers(args.config, cli_overrides=None)
+    storage = SqliteStorage(config.runtime)
+    storage.initialize()
+    customer = storage.get_customer(args.customer_id)
+    if not customer:
+        print(f"Customer not found: {args.customer_id}")
+        return
+
+    memory_store = CustomerMarkdownStore(config.runtime.customer_memory_dir)
+    memory_path = memory_store.memory_path(args.customer_id)
+    memory = memory_path.read_text(encoding="utf-8") if memory_path.exists() else ""
+
+    payload = {
+        "customer": customer,
+        "open_tickets": storage.get_open_tickets_for_context(args.customer_id),
+        "recent_messages": storage.list_recent_messages(args.customer_id),
+        "memory": memory.strip()[:2000],
+    }
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+
+
+def handle_ticket_list(args: argparse.Namespace) -> None:
+    config = load_config_with_layers(args.config, cli_overrides=None)
+    storage = SqliteStorage(config.runtime)
+    storage.initialize()
+    tickets = storage.list_tickets(status=args.status)
+    if not tickets:
+        print("No tickets found.")
+        return
+
+    print("ticket_id | customer_id | status | priority | title")
+    print("-" * 80)
+    for ticket in tickets:
+        print(f"{ticket['id']} | {ticket['customer_id']} | {ticket['status']} | {ticket['priority']} | {ticket['title']}")
+
+
+def _load_or_default(config_path: Path) -> ProjectConfig:
+    if config_path.exists():
+        return load_config(config_path)
+    return default_config()
+
+
+def _parse_metadata_args(values: list[str]) -> dict[str, str]:
+    metadata: dict[str, str] = {}
+    for item in values:
+        if "=" not in item:
+            raise SystemExit(f"Metadata must be KEY=VALUE, got: {item}")
+        key, value = item.split("=", 1)
+        metadata[key.strip()] = value.strip()
+    return metadata
+
+
+def _write_config(config_path: Path, config: ProjectConfig) -> None:
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(dump_config(config), encoding="utf-8")
