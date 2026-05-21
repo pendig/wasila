@@ -196,8 +196,8 @@ def handle_daemon_start(args: argparse.Namespace) -> None:
         config.customer_gateway.metadata,
     )
 
-    def process(event_payload: dict[str, Any]) -> dict[str, Any]:
-        event = gateway.normalize(event_payload)
+    def process(event_payload: dict[str, Any] | CustomerEvent) -> dict[str, Any]:
+        event = event_payload if isinstance(event_payload, CustomerEvent) else gateway.normalize(event_payload)
         result = workflow.run(event)
         return {
             "customer_response": result.customer_response,

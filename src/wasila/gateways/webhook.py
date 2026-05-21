@@ -76,7 +76,7 @@ class WebhookOwnerGateway(OwnerGateway):
 class WebhookDaemon:
     def __init__(
         self,
-        handler: Callable[[dict[str, Any]], dict[str, Any]],
+        handler: Callable[[Any], dict[str, Any]],
         gateway: CustomerGateway | None = None,
         route_gateways: dict[str, CustomerGateway] | None = None,
         host: str = "127.0.0.1",
@@ -87,6 +87,7 @@ class WebhookDaemon:
         self.route_gateways = route_gateways or {}
         self.host = host
         self.port = port
+        self._httpd: ThreadingHTTPServer | None = None
 
     def start(self) -> None:
         gateway = self.gateway
@@ -114,22 +115,49 @@ class WebhookDaemon:
                     inner_self.end_headers()
                     return
                 length = int(inner_self.headers.get("Content-Length", "0") or "0")
-                raw = inner_self.rfile.read(length)
+                raw = inner_self.rfile.read(length) if length > 0 else b""
+
+                if not raw:
+                    inner_self.send_response(400)
+                    inner_self.send_header("Content-Type", "application/json")
+                    response = {
+                        "ok": False,
+                        "error": "invalid json: empty body",
+                    }
+                    raw_response = json.dumps(response).encode("utf-8")
+                    inner_self.send_header("Content-Length", str(len(raw_response)))
+                    inner_self.end_headers()
+                    inner_self.wfile.write(raw_response)
+                    return
+
                 try:
                     payload = json.loads(raw.decode("utf-8"))
                 except json.JSONDecodeError as exc:
                     inner_self.send_response(400)
-                    inner_self.end_headers()
+                    inner_self.send_header("Content-Type", "application/json")
                     response = {"ok": False, "error": f"invalid json: {exc}"}
                     raw_response = json.dumps(response).encode("utf-8")
+                    inner_self.send_header("Content-Length", str(len(raw_response)))
+                    inner_self.end_headers()
+                    inner_self.wfile.write(raw_response)
+                    return
+                except UnicodeDecodeError as exc:
+                    inner_self.send_response(400)
+                    inner_self.send_header("Content-Type", "application/json")
+                    response = {"ok": False, "error": f"invalid body encoding: {exc}"}
+                    raw_response = json.dumps(response).encode("utf-8")
+                    inner_self.send_header("Content-Length", str(len(raw_response)))
+                    inner_self.end_headers()
                     inner_self.wfile.write(raw_response)
                     return
 
                 try:
                     event = request_gateway.normalize(payload)
-                    outcome = self.handler(event.__dict__)
+                    outcome = self.handler(event)
                 except Exception as exc:
                     inner_self.send_response(500)
+                    inner_self.send_header("Content-Type", "application/json")
+                    inner_self.send_header("Content-Length", str(len(json.dumps({"ok": False, "error": str(exc)}).encode("utf-8"))))
                     inner_self.end_headers()
                     response = {"ok": False, "error": str(exc)}
                     raw_response = json.dumps(response).encode("utf-8")
@@ -151,6 +179,7 @@ class WebhookDaemon:
 
         print(f"starting webhook daemon on {self.host}:{self.port}")
         httpd = ThreadingHTTPServer((self.host, self.port), _RequestHandler)
+        self._httpd = httpd
 
         def route_gateways_for_path(path: str) -> CustomerGateway | None:
             if path in {"/webhook/customer", "/customer"}:
@@ -165,3 +194,9 @@ class WebhookDaemon:
             httpd.serve_forever()
         finally:
             httpd.server_close()
+
+    def stop(self) -> None:
+        if self._httpd is not None:
+            self._httpd.shutdown()
+            self._httpd.server_close()
+            self._httpd = None
