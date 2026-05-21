@@ -52,6 +52,20 @@ wasila gateway add customer telegram
 wasila gateway add customer whatsapp
 ```
 
+When customer gateway type is `telegram` or `whatsapp`, daemon also accepts dedicated endpoints:
+
+```bash
+POST /webhook/telegram
+POST /webhook/whatsapp
+```
+
+and fallback endpoint:
+
+```bash
+POST /webhook/customer
+POST /customer
+```
+
 ### Add Owner Gateway
 
 ```bash

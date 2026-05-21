@@ -206,7 +206,17 @@ def handle_daemon_start(args: argparse.Namespace) -> None:
             "gateway": event.gateway,
         }
 
-    daemon = WebhookDaemon(handler=process, gateway=gateway, host=args.host, port=args.port)
+    route_gateways = {}
+    if gateway.name in {"telegram", "whatsapp"}:
+        route_gateways[f"/webhook/{gateway.name}"] = gateway
+
+    daemon = WebhookDaemon(
+        handler=process,
+        gateway=gateway,
+        route_gateways=route_gateways,
+        host=args.host,
+        port=args.port,
+    )
     daemon.start()
 
 

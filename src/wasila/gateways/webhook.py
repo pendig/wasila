@@ -78,11 +78,13 @@ class WebhookDaemon:
         self,
         handler: Callable[[dict[str, Any]], dict[str, Any]],
         gateway: CustomerGateway | None = None,
+        route_gateways: dict[str, CustomerGateway] | None = None,
         host: str = "127.0.0.1",
         port: int = 8000,
     ):
         self.handler = handler
         self.gateway = gateway or WebhookCustomerGateway()
+        self.route_gateways = route_gateways or {}
         self.host = host
         self.port = port
 
@@ -105,7 +107,9 @@ class WebhookDaemon:
                 inner_self.end_headers()
 
             def do_POST(inner_self):  # noqa: N802
-                if inner_self.path not in {"/webhook/customer", "/customer"}:
+                path = inner_self.path.split("?", 1)[0]
+                request_gateway = route_gateways_for_path(path)
+                if request_gateway is None:
                     inner_self.send_response(404)
                     inner_self.end_headers()
                     return
@@ -122,7 +126,7 @@ class WebhookDaemon:
                     return
 
                 try:
-                    event = gateway.normalize(payload)
+                    event = request_gateway.normalize(payload)
                     outcome = self.handler(event.__dict__)
                 except Exception as exc:
                     inner_self.send_response(500)
@@ -147,6 +151,16 @@ class WebhookDaemon:
 
         print(f"starting webhook daemon on {self.host}:{self.port}")
         httpd = ThreadingHTTPServer((self.host, self.port), _RequestHandler)
+
+        def route_gateways_for_path(path: str) -> CustomerGateway | None:
+            if path in {"/webhook/customer", "/customer"}:
+                return self.gateway
+
+            if path.startswith("/webhook/"):
+                return self.route_gateways.get(path)
+
+            return None
+
         try:
             httpd.serve_forever()
         finally:
