@@ -94,6 +94,7 @@ The next CrewAI-facing implementation should:
 
 - Add the CrewAI adapter behind the `Orchestrator` port.
 - Convert profile YAML into CrewAI agents and tasks.
+- Convert provider config into CrewAI `LLM(...)` objects.
 - Expose Wasila skills as CrewAI tools.
 - Load business knowledge into CrewAI knowledge sources.
 - Return a normalized `OrchestrationResult`.

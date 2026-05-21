@@ -15,7 +15,7 @@ Creates local config, profile files, data directories, and SQLite schema.
 ### Configure Provider
 
 ```bash
-wasila provider set openai-compatible --base-url https://api.openai.com/v1 --model gpt-4.1-mini --api-key-env OPENAI_API_KEY
+wasila provider set openai-compatible --base-url https://api.openai.com/v1 --model openai/gpt-4.1-mini --api-key-env OPENAI_API_KEY
 ```
 
 Stores provider configuration references for any OpenAI-compatible API provider. Secrets should stay in environment variables or local ignored config.

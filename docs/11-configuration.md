@@ -34,7 +34,7 @@ knowledge_dir = "knowledge"
 [provider]
 type = "openai-compatible"
 base_url = "https://api.openai.com/v1"
-model = "gpt-4.1-mini"
+model = "openai/gpt-4.1-mini"
 api_key_env = "OPENAI_API_KEY"
 
 [gateways.customer]
@@ -75,7 +75,7 @@ Example for OpenAI's official API:
 [provider]
 type = "openai-compatible"
 base_url = "https://api.openai.com/v1"
-model = "gpt-4.1-mini"
+model = "openai/gpt-4.1-mini"
 api_key_env = "OPENAI_API_KEY"
 ```
 

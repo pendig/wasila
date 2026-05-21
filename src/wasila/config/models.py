@@ -14,7 +14,7 @@ class RuntimeSettings:
 class ProviderSettings:
     type: str = "openai-compatible"
     base_url: str = "https://api.openai.com/v1"
-    model: str = "gpt-4.1-mini"
+    model: str = "openai/gpt-4.1-mini"
     api_key_env: str = "OPENAI_API_KEY"
 
 
@@ -32,4 +32,3 @@ class ProjectConfig:
     provider: ProviderSettings
     customer_gateway: GatewayConfig
     owner_gateway: GatewayConfig
-

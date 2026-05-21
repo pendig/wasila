@@ -53,7 +53,7 @@ These commands describe the intended developer experience. They are design targe
 ```bash
 wasila init startup_saas
 wasila kb init
-wasila provider set openai-compatible --base-url https://api.openai.com/v1 --model gpt-4.1-mini --api-key-env OPENAI_API_KEY
+wasila provider set openai-compatible --base-url https://api.openai.com/v1 --model openai/gpt-4.1-mini --api-key-env OPENAI_API_KEY
 wasila gateway add customer webhook
 wasila gateway add owner webhook
 wasila daemon start

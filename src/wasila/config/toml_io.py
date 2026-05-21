@@ -24,7 +24,7 @@ def load_config(path: Path) -> ProjectConfig:
         provider=ProviderSettings(
             type=provider.get("type", "openai-compatible"),
             base_url=provider.get("base_url", "https://api.openai.com/v1"),
-            model=provider.get("model", "gpt-4.1-mini"),
+            model=provider.get("model", "openai/gpt-4.1-mini"),
             api_key_env=provider.get("api_key_env", "OPENAI_API_KEY"),
         ),
         customer_gateway=GatewayConfig(type=gateways.get("customer", {}).get("type", "webhook")),
@@ -54,4 +54,3 @@ type = "{config.customer_gateway.type}"
 [gateways.owner]
 type = "{config.owner_gateway.type}"
 """
-

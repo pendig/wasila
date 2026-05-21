@@ -20,6 +20,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(loaded.profile, "startup_saas")
         self.assertEqual(loaded.provider.type, "openai-compatible")
         self.assertEqual(loaded.provider.base_url, "https://api.openai.com/v1")
+        self.assertEqual(loaded.provider.model, "openai/gpt-4.1-mini")
         self.assertEqual(loaded.customer_gateway.type, "webhook")
         self.assertEqual(loaded.owner_gateway.type, "webhook")
 
