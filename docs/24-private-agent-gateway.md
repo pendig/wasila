@@ -31,7 +31,7 @@ wasila validates result
 Example command shape:
 
 ```bash
-wasila assistant add cli --name hermes --command "hermes -p private-assistant"
+# Planned: wasila assistant add cli --name hermes --command "hermes -p private-assistant"
 ```
 
 The command is configuration, not a hard dependency. OpenClaw or another agent can use the same JSON contract.

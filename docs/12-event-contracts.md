@@ -64,7 +64,6 @@ Returned by the local orchestration runner after optional private-assistant dele
   "owner_notifications": [],
   "skill_results": [],
   "agent_runs": [],
-  "private_agent_jobs": [],
   "metadata_json": {}
 }
 ```
@@ -77,6 +76,9 @@ Required MVP fields:
 - `owner_notifications`
 - `skill_results`
 - `agent_runs`
+
+Planned field after the private assistant adapter is implemented:
+
 - `private_agent_jobs`
 
 ## TicketUpdate

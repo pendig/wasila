@@ -60,7 +60,7 @@ wasila kb init
 wasila provider set openai-compatible --base-url https://api.openai.com/v1 --model openai/gpt-4.1-mini --api-key-env OPENAI_API_KEY
 wasila gateway add customer webhook
 wasila gateway add owner webhook
-wasila assistant add cli --name hermes --command "hermes -p private-assistant"
+# Planned: wasila assistant add cli --name hermes --command "hermes -p private-assistant"
 wasila daemon start
 wasila sandbox customer
 wasila sandbox owner
