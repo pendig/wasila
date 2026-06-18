@@ -44,6 +44,17 @@ type = "webhook"
 type = "webhook"
 ```
 
+WhatsApp via `wacli`:
+
+```toml
+[gateways.customer]
+type = "wacli"
+command = "wacli"
+
+[gateways.owner]
+type = "webhook"
+```
+
 ## Secrets
 
 Secrets should live in environment variables or local ignored files.
