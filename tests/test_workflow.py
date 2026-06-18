@@ -19,6 +19,7 @@ from wasila.core.contracts import (
 )
 from wasila.core.policies import DefaultPolicyEngine
 from wasila.core.workflow import Workflow
+from wasila.runner.crewai_runner import _as_result
 
 
 class _FakeStorage:
@@ -247,7 +248,7 @@ class _FakePrivateAgentAdapter:
         return PrivateAgentResult(
             job_id=job.job_id,
             status="done",
-            customer_reply="  Private assistant answer.  ",
+            customer_reply="  Private assistant answer.\ninternal memory: nope\ncredential: nope  ",
             owner_note="delegated",
         )
 
@@ -359,6 +360,7 @@ class WorkflowTests(unittest.TestCase):
     def test_workflow_delegates_to_private_assistant_when_policy_allows(self):
         with TemporaryDirectory() as tmp:
             config = default_config()
+            config.assistants["manual"] = AssistantConfig(type="manual")
             config.assistants["hermes"] = AssistantConfig(type="cli", command=["agent"])
             storage = _FakeStorageWithTracking()
             private_agent = _FakePrivateAgentAdapter()
@@ -379,14 +381,31 @@ class WorkflowTests(unittest.TestCase):
                     gateway="webhook",
                     external_customer_id="ext_4",
                     external_conversation_id="conv_4",
-                    message_text="Need help from specialist",
+                    message_text="   ",
                 )
             )
 
         self.assertEqual(result.customer_response, "Private assistant answer.")
         self.assertEqual(len(private_agent.jobs), 1)
+        self.assertEqual(private_agent.jobs[0].summary, "No message text provided")
         self.assertTrue(result.metadata_json["private_agent_delegated"])
+        self.assertEqual(result.metadata_json["private_agent_name"], "hermes")
         self.assertEqual(storage.agent_runs[-1].agent_name, "private_agent")
+
+    def test_crewai_result_preserves_private_agent_metadata(self):
+        result = _as_result(
+            "startup_saas",
+            CustomerEvent(gateway="webhook", message_text="Need specialist"),
+            {
+                "customer_response": "Checking.",
+                "action": "none",
+                "needs_private_agent": True,
+                "private_agent_intent": "specialist_answer",
+            },
+        )
+
+        self.assertTrue(result.metadata_json["needs_private_agent"])
+        self.assertEqual(result.metadata_json["private_agent_intent"], "specialist_answer")
 
 
 if __name__ == "__main__":

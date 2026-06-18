@@ -51,6 +51,7 @@ class Workflow:
     owner_gateway: OwnerGateway
     policy: PolicyEngine = field(default_factory=DefaultPolicyEngine)
     private_agent_adapter: PrivateAgentAdapter | None = None
+    private_agent_name: str | None = None
 
     def run(self, event: CustomerEvent) -> OrchestrationResult:
         event_id = event.id or _build_dedup_event_id(event)
@@ -167,12 +168,14 @@ class Workflow:
         if not self.policy.allow_private_agent_delegation(result):
             return
 
-        assistant_name = next(iter(self.config.assistants))
+        assistant_name = self.private_agent_name or self._first_cli_assistant_name()
+        if not assistant_name:
+            return
         job = PrivateAgentJob(
             job_id=f"paj_{uuid4().hex}",
             customer_id=customer_context.customer.get("id", event.customer_id or ""),
             intent=str(result.metadata_json.get("private_agent_intent") or "assist"),
-            summary=event.message_text.strip(),
+            summary=event.message_text.strip() or "No message text provided",
             safe_context={
                 "frontdesk_reply": result.customer_response,
                 "customer_message": event.message_text,
@@ -201,9 +204,21 @@ class Workflow:
             )
         )
         if private_result.status in {"done", "needs_owner"}:
-            filtered_reply = private_result.customer_reply.strip()
+            filtered_reply = self._customer_safe_reply(private_result.customer_reply)
             if filtered_reply:
                 result.customer_response = filtered_reply
+
+    def _first_cli_assistant_name(self) -> str | None:
+        for name, assistant in self.config.assistants.items():
+            if assistant.type == "cli" and assistant.command:
+                return name
+        return None
+
+    @staticmethod
+    def _customer_safe_reply(reply: str) -> str:
+        blocked = ("internal memory", "credential", "secret", "token", "do not contact the customer")
+        lines = [line.strip() for line in reply.splitlines()]
+        return "\n".join(line for line in lines if line and not any(word in line.lower() for word in blocked))
 
     def _apply_ticket_updates(self, customer_id: str, updates: list[TicketUpdate]) -> list[str]:
         ticket_ids: list[str] = []

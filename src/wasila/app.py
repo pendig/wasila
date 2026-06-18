@@ -35,9 +35,11 @@ def load_project(
     orchestrator = build_orchestrator(profile=profile, provider=config.provider)
     owner_gateway = build_owner_gateway(config.owner_gateway.type, config.owner_gateway.metadata)
     private_agent_adapter = None
-    for assistant in config.assistants.values():
+    private_agent_name = None
+    for name, assistant in config.assistants.items():
         if assistant.type == "cli" and assistant.command:
             private_agent_adapter = CliPrivateAgentAdapter(assistant.command)
+            private_agent_name = name
             break
 
     workflow = Workflow(
@@ -50,6 +52,7 @@ def load_project(
         owner_gateway=owner_gateway,
         policy=DefaultPolicyEngine(),
         private_agent_adapter=private_agent_adapter,
+        private_agent_name=private_agent_name,
     )
 
     return config, profile, workflow
