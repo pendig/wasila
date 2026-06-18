@@ -66,17 +66,35 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(result.to_json(), data)
 
     def test_private_agent_job_rejects_customer_channel_credentials(self):
-        data = {
-            "job_id": "job_001",
-            "customer_id": "cust_123",
-            "intent": "build_website",
-            "summary": "Customer wants a simple company website.",
-            "safe_context": {"access_token": "nope"},
-            "forbidden": [],
-        }
+        keys = [
+            "access_token",
+            "accessToken",
+            "slack_token",
+            "apiKey",
+            "db-password",
+            "client_secret",
+            "api key",
+            "refresh.token",
+            "access/token",
+        ]
+        for key in keys:
+            data = {
+                "job_id": "job_001",
+                "customer_id": "cust_123",
+                "intent": "build_website",
+                "summary": "Customer wants a simple company website.",
+                "safe_context": {key: "nope"},
+                "forbidden": [],
+            }
 
+            with self.assertRaises(ValueError):
+                private_agent_job_from_json(data)
+
+    def test_private_agent_parsers_reject_non_dictionary_payloads(self):
         with self.assertRaises(ValueError):
-            private_agent_job_from_json(data)
+            private_agent_job_from_json([])
+        with self.assertRaises(ValueError):
+            private_agent_result_from_json([])
 
 
 if __name__ == "__main__":

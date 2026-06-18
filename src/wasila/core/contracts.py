@@ -147,10 +147,12 @@ _SECRET_KEY_NAMES = {
     "api_key",
     "access_token",
     "auth_token",
+    "client_secret",
     "cookie",
     "credentials",
     "gateway_credentials",
     "password",
+    "refresh_token",
     "secret",
     "session",
     "token",
@@ -163,10 +165,15 @@ def _reject_unknown_keys(data: JSONDict, allowed: set[str], contract: str) -> No
         raise ValueError(f"{contract} has unsupported fields: {', '.join(unknown)}")
 
 
+def _secret_key_match(key: str) -> bool:
+    key_norm = "".join(char for char in key.lower() if char.isalnum())
+    return any(secret.replace("_", "") in key_norm for secret in _SECRET_KEY_NAMES)
+
+
 def _reject_secret_keys(value: Any, path: str = "root") -> None:
     if isinstance(value, dict):
         for key, child in value.items():
-            if str(key).lower() in _SECRET_KEY_NAMES:
+            if _secret_key_match(str(key)):
                 raise ValueError(f"private agent payload must not include customer-channel credential field: {path}.{key}")
             _reject_secret_keys(child, f"{path}.{key}")
     elif isinstance(value, list):
@@ -188,7 +195,9 @@ def _optional_str(data: JSONDict, key: str, contract: str) -> str | None:
     raise ValueError(f"{contract}.{key} must be a string or null")
 
 
-def private_agent_job_from_json(data: JSONDict) -> PrivateAgentJob:
+def private_agent_job_from_json(data: Any) -> PrivateAgentJob:
+    if not isinstance(data, dict):
+        raise ValueError("PrivateAgentJob payload must be a dictionary")
     _reject_unknown_keys(data, _PRIVATE_AGENT_JOB_KEYS, "PrivateAgentJob")
     _reject_secret_keys(data)
     safe_context = data.get("safe_context", {})
@@ -208,7 +217,9 @@ def private_agent_job_from_json(data: JSONDict) -> PrivateAgentJob:
     )
 
 
-def private_agent_result_from_json(data: JSONDict) -> PrivateAgentResult:
+def private_agent_result_from_json(data: Any) -> PrivateAgentResult:
+    if not isinstance(data, dict):
+        raise ValueError("PrivateAgentResult payload must be a dictionary")
     _reject_unknown_keys(data, _PRIVATE_AGENT_RESULT_KEYS, "PrivateAgentResult")
     actions_requested = data.get("actions_requested", [])
     if data.get("status") not in {"done", "needs_owner", "failed"}:
