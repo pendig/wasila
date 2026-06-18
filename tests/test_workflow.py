@@ -3,6 +3,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from uuid import uuid4
 
+from wasila.config.defaults import default_config
+from wasila.config.models import AssistantConfig
 from wasila.core.contracts import (
     AgentRun,
     CustomerContext,
@@ -10,11 +12,14 @@ from wasila.core.contracts import (
     MemoryUpdate,
     OwnerNotification,
     OrchestrationResult,
+    PrivateAgentJob,
+    PrivateAgentResult,
     SkillResult,
     TicketUpdate,
 )
 from wasila.core.policies import DefaultPolicyEngine
 from wasila.core.workflow import Workflow
+from wasila.runner.crewai_runner import _as_result
 
 
 class _FakeStorage:
@@ -220,6 +225,34 @@ class _FakeOrchestrator:
         )
 
 
+class _DelegatingOrchestrator:
+    def __init__(self, delegate: bool) -> None:
+        self.delegate = delegate
+
+    def run(self, event: CustomerEvent, context: CustomerContext) -> OrchestrationResult:
+        metadata = {}
+        if self.delegate:
+            metadata = {"needs_private_agent": True, "private_agent_intent": "answer"}
+        return OrchestrationResult(
+            customer_response="Frontdesk answer",
+            metadata_json=metadata,
+        )
+
+
+class _FakePrivateAgentAdapter:
+    def __init__(self) -> None:
+        self.jobs: list[PrivateAgentJob] = []
+
+    def run(self, job: PrivateAgentJob) -> PrivateAgentResult:
+        self.jobs.append(job)
+        return PrivateAgentResult(
+            job_id=job.job_id,
+            status="done",
+            customer_reply="  Private assistant answer.\ninternal memory: nope\ncredential: nope  ",
+            owner_note="delegated",
+        )
+
+
 class _FakeOwnerGateway:
     def __init__(self) -> None:
         self.delivered: list[OwnerNotification] = []
@@ -293,6 +326,86 @@ class WorkflowTests(unittest.TestCase):
             self.assertGreater(len(storage.agent_runs), 0)
             self.assertEqual(len(owner_gateway.delivered), 1)
             self.assertEqual(len(result.metadata_json.get("owner_summary_ids", [])), 1)
+
+    def test_workflow_can_still_answer_directly_without_delegation(self):
+        with TemporaryDirectory() as tmp:
+            config = default_config()
+            config.assistants["hermes"] = AssistantConfig(type="cli", command=["agent"])
+            storage = _FakeStorageWithTracking()
+            private_agent = _FakePrivateAgentAdapter()
+            workflow = Workflow(
+                config=config,
+                profile=_FakeProfile(),
+                storage=storage,
+                orchestrator=_DelegatingOrchestrator(delegate=False),
+                memory_store=_FakeMemoryStore(Path(tmp)),
+                knowledge_loader=_FakeKnowledgeLoader(),
+                owner_gateway=_FakeOwnerGateway(),
+                policy=DefaultPolicyEngine(),
+                private_agent_adapter=private_agent,
+            )
+
+            result = workflow.run(
+                CustomerEvent(
+                    gateway="webhook",
+                    external_customer_id="ext_3",
+                    external_conversation_id="conv_3",
+                    message_text="Can you answer directly?",
+                )
+            )
+
+        self.assertEqual(result.customer_response, "Frontdesk answer")
+        self.assertEqual(private_agent.jobs, [])
+
+    def test_workflow_delegates_to_private_assistant_when_policy_allows(self):
+        with TemporaryDirectory() as tmp:
+            config = default_config()
+            config.assistants["manual"] = AssistantConfig(type="manual")
+            config.assistants["hermes"] = AssistantConfig(type="cli", command=["agent"])
+            storage = _FakeStorageWithTracking()
+            private_agent = _FakePrivateAgentAdapter()
+            workflow = Workflow(
+                config=config,
+                profile=_FakeProfile(),
+                storage=storage,
+                orchestrator=_DelegatingOrchestrator(delegate=True),
+                memory_store=_FakeMemoryStore(Path(tmp)),
+                knowledge_loader=_FakeKnowledgeLoader(),
+                owner_gateway=_FakeOwnerGateway(),
+                policy=DefaultPolicyEngine(),
+                private_agent_adapter=private_agent,
+            )
+
+            result = workflow.run(
+                CustomerEvent(
+                    gateway="webhook",
+                    external_customer_id="ext_4",
+                    external_conversation_id="conv_4",
+                    message_text="   ",
+                )
+            )
+
+        self.assertEqual(result.customer_response, "Private assistant answer.")
+        self.assertEqual(len(private_agent.jobs), 1)
+        self.assertEqual(private_agent.jobs[0].summary, "No message text provided")
+        self.assertTrue(result.metadata_json["private_agent_delegated"])
+        self.assertEqual(result.metadata_json["private_agent_name"], "hermes")
+        self.assertEqual(storage.agent_runs[-1].agent_name, "private_agent")
+
+    def test_crewai_result_preserves_private_agent_metadata(self):
+        result = _as_result(
+            "startup_saas",
+            CustomerEvent(gateway="webhook", message_text="Need specialist"),
+            {
+                "customer_response": "Checking.",
+                "action": "none",
+                "needs_private_agent": True,
+                "private_agent_intent": "specialist_answer",
+            },
+        )
+
+        self.assertTrue(result.metadata_json["needs_private_agent"])
+        self.assertEqual(result.metadata_json["private_agent_intent"], "specialist_answer")
 
 
 if __name__ == "__main__":

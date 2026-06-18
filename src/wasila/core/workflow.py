@@ -15,13 +15,14 @@ from wasila.core.contracts import (
     MemoryUpdate,
     OrchestrationResult,
     OwnerNotification,
+    PrivateAgentJob,
     SkillCall,
     SkillResult,
     TicketUpdate,
 )
 from wasila.core.policies import DefaultPolicyEngine
 from wasila.core.ports import Orchestrator, OwnerGateway, PolicyEngine, Storage
-from wasila.core.ports import CustomerMemoryStore, KnowledgeLoader
+from wasila.core.ports import CustomerMemoryStore, KnowledgeLoader, PrivateAgentAdapter
 from wasila.profiles import ProfileDefinition
 
 
@@ -49,6 +50,8 @@ class Workflow:
     knowledge_loader: KnowledgeLoader
     owner_gateway: OwnerGateway
     policy: PolicyEngine = field(default_factory=DefaultPolicyEngine)
+    private_agent_adapter: PrivateAgentAdapter | None = None
+    private_agent_name: str | None = None
 
     def run(self, event: CustomerEvent) -> OrchestrationResult:
         event_id = event.id or _build_dedup_event_id(event)
@@ -101,6 +104,7 @@ class Workflow:
         )
 
         result = self._run_orchestrator(event, customer_context)
+        self._maybe_delegate_to_private_agent(event, customer_context, result)
 
         applied_ticket_ids = self._apply_ticket_updates(customer_id, result.ticket_updates)
         self._apply_memory_updates(customer_id, applied_ticket_ids, result.memory_updates)
@@ -152,6 +156,69 @@ class Workflow:
                 customer_response="I can help with this, and I'll pass it to a teammate for follow-up.",
                 metadata_json={"failure": "orchestrator_error", "error": str(exc)},
             )
+
+    def _maybe_delegate_to_private_agent(
+        self,
+        event: CustomerEvent,
+        customer_context: CustomerContext,
+        result: OrchestrationResult,
+    ) -> None:
+        if not self.private_agent_adapter or not self.config.assistants:
+            return
+        if not self.policy.allow_private_agent_delegation(result):
+            return
+
+        assistant_name = self.private_agent_name or self._first_cli_assistant_name()
+        if not assistant_name:
+            return
+        job = PrivateAgentJob(
+            job_id=f"paj_{uuid4().hex}",
+            customer_id=customer_context.customer.get("id", event.customer_id or ""),
+            intent=str(result.metadata_json.get("private_agent_intent") or "assist"),
+            summary=event.message_text.strip() or "No message text provided",
+            safe_context={
+                "frontdesk_reply": result.customer_response,
+                "customer_message": event.message_text,
+            },
+            forbidden=[
+                "do not contact the customer directly",
+                "do not expose internal memory or credentials",
+            ],
+        )
+        try:
+            private_result = self.private_agent_adapter.run(job)
+        except Exception as exc:  # pragma: no cover - guardrail fallback
+            result.metadata_json["private_agent_error"] = str(exc)
+            return
+
+        result.metadata_json["private_agent_delegated"] = True
+        result.metadata_json["private_agent_name"] = assistant_name
+        result.agent_runs.append(
+            AgentRun(
+                profile=customer_context.profile,
+                agent_name="private_agent",
+                task_name="delegation",
+                status=private_result.status,
+                input_json=job.to_json(),
+                output_json=private_result.to_json(),
+            )
+        )
+        if private_result.status in {"done", "needs_owner"}:
+            filtered_reply = self._customer_safe_reply(private_result.customer_reply)
+            if filtered_reply:
+                result.customer_response = filtered_reply
+
+    def _first_cli_assistant_name(self) -> str | None:
+        for name, assistant in self.config.assistants.items():
+            if assistant.type == "cli" and assistant.command:
+                return name
+        return None
+
+    @staticmethod
+    def _customer_safe_reply(reply: str) -> str:
+        blocked = ("internal memory", "credential", "secret", "token", "do not contact the customer")
+        lines = [line.strip() for line in reply.splitlines()]
+        return "\n".join(line for line in lines if line and not any(word in line.lower() for word in blocked))
 
     def _apply_ticket_updates(self, customer_id: str, updates: list[TicketUpdate]) -> list[str]:
         ticket_ids: list[str] = []

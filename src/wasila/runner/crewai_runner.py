@@ -173,7 +173,7 @@ def _run_simple_crew(*, Agent, Crew, Task, llm: Any, profile: ProfileDefinition,
 
     orchestration_task = Task(
         description=prompt,
-        expected_output="JSON with keys: customer_response, action, ticket_summary, memory_section, memory_body, owner_needed, owner_summary, owner_action, owner_risk",
+        expected_output="JSON with keys: customer_response, action, ticket_summary, memory_section, memory_body, owner_needed, owner_summary, owner_action, owner_risk, needs_private_agent, private_agent_intent",
         agent=front_agent,
     )
 
@@ -270,6 +270,11 @@ def _as_result(profile_id: str, event: CustomerEvent, payload: dict[str, Any]) -
             output_json={"parsed_payload": payload},
         )
     )
+    metadata_json = {
+        key: payload[key]
+        for key in ("needs_private_agent", "private_agent_intent")
+        if key in payload
+    }
 
     return OrchestrationResult(
         customer_response=response,
@@ -278,6 +283,7 @@ def _as_result(profile_id: str, event: CustomerEvent, payload: dict[str, Any]) -
         owner_notifications=owner_notifications,
         skill_results=skill_results,
         agent_runs=agent_runs,
+        metadata_json=metadata_json,
     )
 
 

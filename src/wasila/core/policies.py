@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from wasila.core.contracts import MemoryUpdate, OwnerNotification, SkillCall
+from wasila.core.contracts import MemoryUpdate, OrchestrationResult, OwnerNotification, SkillCall
 from wasila.core.ports import PolicyEngine
 
 
@@ -50,3 +50,6 @@ class DefaultPolicyEngine(PolicyEngine):
             return True
         summary = notification.summary.lower()
         return any(signal in summary for signal in self.high_risk_signals)
+
+    def allow_private_agent_delegation(self, result: OrchestrationResult) -> bool:
+        return result.metadata_json.get("needs_private_agent") is True
