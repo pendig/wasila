@@ -1,10 +1,10 @@
 # Wasila
 
-Customer AI orchestration with memory, tickets, and owner-aware agents.
+Lightweight customer-support gateway for private AI assistants, with memory, tickets, and owner-aware escalation.
 
-Wasila is an MVP-focused CLI kit for building customer-facing AI teams with CrewAI as the default orchestration engine. It helps small teams onboard an AI customer profile, connect it to a messaging gateway, keep long-term customer memory, and trace operational work through a simple ticket store.
+Wasila is an MVP-focused CLI kit for putting a safe customer frontdesk in front of private AI assistants such as Hermes, OpenClaw, or any other agent runtime. It helps small teams connect customer messages to a lightweight support workflow, keep long-term customer memory, trace tickets, and delegate sanitized work to private assistants when needed.
 
-The first goal is not to build a universal AI platform. The first goal is to make one useful customer workflow easy to run locally, easy to inspect, and easy to extend.
+The first goal is not to build a universal AI platform. The first goal is to make one useful customer workflow easy to run locally, easy to inspect, and safe to connect to private assistants.
 
 Wasila is intended to be open-source friendly: clear docs, small extension points, local-first defaults, no hidden cloud dependency for the MVP, and a roadmap that separates what is implemented from what is planned.
 
@@ -20,15 +20,17 @@ Each customer can have:
 - Tickets and ticket events for traceable work.
 - Agent run logs for debugging orchestration decisions.
 - Owner summaries when a conversation needs business attention.
+- Sanitized private-assistant jobs when work should be delegated to Hermes, OpenClaw, or another AI agent.
 
 ## MVP Scope
 
 The MVP starts with one profile and a simple gateway model:
 
 - Profile: `startup_saas`
-- Customer gateway: generic HTTP webhook
+- Customer gateway: generic HTTP webhook first, with WhatsApp via `wacli` planned as the first platform adapter
+- Private assistant gateway: CLI job adapter first, so Hermes, OpenClaw, or another agent can process sanitized work without seeing the raw customer channel
 - Owner gateway: generic HTTP webhook first, with OpenClaw and Hermes planned as owner notification gateways
-- Orchestration: CrewAI
+- Orchestration: Wasila workflow with CrewAI as the default in-process runner; private assistants are external workers behind a job contract
 - Storage: SQLite as operational source of truth plus one `customer.md` per customer for relationship memory
 - Knowledge: local business knowledge base for company and product context
 - Runtime: local CLI daemon plus CLI sandbox
@@ -40,11 +42,13 @@ The MVP should prove this flow:
 2. Resolve or create the customer identity.
 3. Load `customer.md` and SQLite context.
 4. Load the business knowledge base for shared company context.
-5. Route the message through a CrewAI-powered agent team.
-6. Create or update a ticket when needed.
-7. Update customer memory when the interaction adds durable context.
-8. Return a response through the gateway.
-9. Produce an owner summary for important escalations.
+5. Answer directly when the frontdesk can safely handle it.
+6. Delegate a sanitized `PrivateAgentJob` to Hermes, OpenClaw, or another assistant when deeper work is needed.
+7. Receive a `PrivateAgentResult` and filter it before customer delivery.
+8. Create or update a ticket when needed.
+9. Update customer memory when the interaction adds durable context.
+10. Return a response through the customer gateway.
+11. Produce an owner summary for important escalations.
 
 ## Example CLI
 
@@ -56,6 +60,7 @@ wasila kb init
 wasila provider set openai-compatible --base-url https://api.openai.com/v1 --model openai/gpt-4.1-mini --api-key-env OPENAI_API_KEY
 wasila gateway add customer webhook
 wasila gateway add owner webhook
+wasila assistant add cli --name hermes --command "hermes -p private-assistant"
 wasila daemon start
 wasila sandbox customer
 wasila sandbox owner
@@ -84,13 +89,14 @@ pip install -e ".[crewai]"
 
 Wasila should stay modular even while the MVP is small:
 
-- Profiles define agents, tasks, prompts, and domain behavior.
+- Profiles define frontdesk behavior, prompts, escalation rules, and safe delegation policy.
 - Customer gateways receive customer conversations.
+- Private assistant gateways send sanitized jobs to Hermes, OpenClaw, or any other worker agent and receive structured results.
 - Owner gateways send owner summaries, alerts, and approval requests.
 - Providers wrap OpenAI-compatible LLM API configuration, including `base_url`, `model`, and API key environment variable.
 - Storage keeps memory and operational state inspectable.
 - Skills let agents execute controlled, traceable actions.
-- The orchestration layer uses CrewAI by default while keeping Wasila's own interface stable.
+- The orchestration layer uses CrewAI by default for local workflow while keeping Wasila's private-assistant job contract stable.
 
 See the documentation in `docs/` for the MVP architecture and product decisions. Start with `docs/README.md`.
 
@@ -111,6 +117,7 @@ Useful starting points:
 - `docs/18-smoke-scenarios.md`
 - `docs/21-skills-and-execution.md`
 - `docs/23-crewai-alignment.md`
+- `docs/24-private-agent-gateway.md`
 
 ## Roadmap
 
@@ -119,6 +126,7 @@ After the local CLI daemon becomes stable, Wasila can grow into:
 - An HTTP API for external systems.
 - A web-based daemon console for inspecting customers, tickets, runs, and owner summaries.
 - Additional customer gateways such as Telegram and WhatsApp.
+- Private assistant adapters for Hermes, OpenClaw, and other agents.
 - Owner gateways such as OpenClaw and Hermes.
 - More profiles for agencies, e-commerce, education, and appointment-based businesses.
 

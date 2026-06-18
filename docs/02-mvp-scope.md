@@ -26,20 +26,21 @@ Produces concise owner-facing summaries for important customer interactions. Thi
 
 ## First Gateways
 
-The MVP uses a generic HTTP webhook as the first gateway type.
+The MVP uses a generic HTTP webhook as the first gateway type and treats WhatsApp via `wacli` as the first practical customer-channel adapter after webhook.
 
-Wasila separates gateways by audience:
+Wasila separates gateways by trust boundary:
 
-- Customer gateways receive and respond to customer conversations.
+- Customer gateways receive and respond to public customer conversations.
+- Private assistant gateways send sanitized jobs to Hermes, OpenClaw, or another worker agent.
 - Owner gateways send owner summaries, alerts, and approval requests.
 
 The first customer gateway is `webhook`.
 
 The first owner gateway is also `webhook`, so owner notifications can be tested without committing to a specific messaging platform.
 
-OpenClaw and Hermes are planned as owner gateway integrations. They should let a user decide from the CLI where owner-facing summaries and escalation messages should be delivered.
+OpenClaw and Hermes are planned first as private assistant integrations and owner gateway integrations. They should not become public customer gateways. Customer messages must pass through Wasila first.
 
-Platform-specific customer adapters such as Telegram and WhatsApp can be added after the internal event model is stable.
+Platform-specific customer adapters such as `wacli`, Telegram, and WhatsApp can be added after the internal event model is stable.
 
 ## First Storage
 
@@ -54,7 +55,7 @@ The storage layer should be simple enough to inspect manually during development
 
 The MVP runs as a local daemon started by the CLI.
 
-The daemon receives webhook events, calls the orchestration layer, persists state, and returns gateway responses.
+The daemon receives customer events, calls the local workflow, optionally delegates sanitized jobs to private assistants, persists state, and returns gateway responses.
 
 ## First Sandbox
 
@@ -91,9 +92,9 @@ The owner sandbox should be able to:
 ## Deferred Until After MVP
 
 - Telegram gateway.
-- WhatsApp gateway.
-- OpenClaw owner gateway.
-- Hermes owner gateway.
+- Native WhatsApp gateway beyond the first `wacli` adapter.
+- OpenClaw native adapter.
+- Hermes native adapter.
 - Web dashboard.
 - HTTP API.
 - Queue workers.
