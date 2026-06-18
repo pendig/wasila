@@ -106,6 +106,82 @@ class CliTests(unittest.TestCase):
 
             self.assertFalse(config_path.exists())
 
+    def test_assistant_add_cli_rejects_invalid_shell_command(self):
+        with TemporaryDirectory() as tmp:
+            config_path = Path(tmp) / ".wasila" / "config.toml"
+            with self.assertRaises(SystemExit):
+                main(
+                    [
+                        "--config",
+                        str(config_path),
+                        "assistant",
+                        "add",
+                        "cli",
+                        "--name",
+                        "bad",
+                        "--command",
+                        "agent 'unterminated",
+                    ]
+                )
+
+    def test_assistant_add_cli_allows_secret_named_options_without_values(self):
+        with TemporaryDirectory() as tmp:
+            config_path = Path(tmp) / ".wasila" / "config.toml"
+            main(
+                [
+                    "--config",
+                    str(config_path),
+                    "assistant",
+                    "add",
+                    "cli",
+                    "--name",
+                    "env_agent",
+                    "--command",
+                    "agent --api-key-env WASILA_AGENT_KEY --token-file /tmp/token",
+                ]
+            )
+
+            data = tomllib.loads(config_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(data["assistants"]["env_agent"]["type"], "cli")
+
+    def test_assistant_name_must_be_ascii_toml_bare_key(self):
+        with TemporaryDirectory() as tmp:
+            config_path = Path(tmp) / ".wasila" / "config.toml"
+            with self.assertRaises(SystemExit):
+                main(
+                    [
+                        "--config",
+                        str(config_path),
+                        "assistant",
+                        "add",
+                        "cli",
+                        "--name",
+                        "café",
+                        "--command",
+                        "agent",
+                    ]
+                )
+
+    def test_assistant_config_round_trips_escaped_strings_and_bad_type(self):
+        with TemporaryDirectory() as tmp:
+            config_path = Path(tmp) / ".wasila" / "config.toml"
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                '[project]\nname = "demo"\nprofile = "startup_saas"\n\n'
+                '[assistants.quoted]\n'
+                'type = 123\n'
+                'command = ["agent", "line\\nbreak", "tab\\tvalue"]\n',
+                encoding="utf-8",
+            )
+
+            output = io.StringIO()
+            with redirect_stdout(output):
+                main(["--config", str(config_path), "assistant", "list"])
+
+        self.assertIn("quoted", output.getvalue())
+        self.assertIn("cli", output.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()

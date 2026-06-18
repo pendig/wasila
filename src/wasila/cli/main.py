@@ -215,10 +215,13 @@ def handle_gateway_add(args: argparse.Namespace) -> None:
 
 
 def handle_assistant_add_cli(args: argparse.Namespace) -> None:
-    if not args.name.replace("-", "_").isidentifier():
-        raise SystemExit("assistant name must be a simple identifier")
+    if not _is_toml_bare_key(args.name):
+        raise SystemExit("assistant name must be ASCII letters, numbers, _ or -")
 
-    command = shlex.split(args.command)
+    try:
+        command = shlex.split(args.command)
+    except ValueError as exc:
+        raise SystemExit(f"invalid assistant command: {exc}") from exc
     if not command:
         raise SystemExit("assistant command must not be empty")
     if _command_has_secret(command):
@@ -241,11 +244,21 @@ def handle_assistant_list(args: argparse.Namespace) -> None:
         print(f"{name}\t{assistant.type}\t{command}")
 
 
+def _is_toml_bare_key(value: str) -> bool:
+    allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-")
+    return bool(value) and all(char in allowed for char in value)
+
+
 def _command_has_secret(command: list[str]) -> bool:
     secret_words = {"api_key", "apikey", "password", "secret", "token"}
     for arg in command:
+        _, value = arg.split("=", 1) if "=" in arg else ("", arg)
+        if value.startswith(("-", "$")):
+            continue
+        if "/" in value or "\\" in value or "." in value:
+            continue
         normalized = "".join(
-            char for char in arg.lower() if char.isalnum() or char == "_"
+            char for char in value.lower() if char.isalnum() or char == "_"
         )
         if any(word in normalized for word in secret_words):
             return True

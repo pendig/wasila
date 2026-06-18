@@ -36,7 +36,7 @@ def _format_metadata(section_name: str, metadata: dict[str, str]) -> str:
 
 
 def _toml_string(value: str) -> str:
-    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    return json.dumps(value, ensure_ascii=False)
 
 
 def _as_assistants(value: object) -> dict[str, AssistantConfig]:
@@ -53,8 +53,10 @@ def _as_assistants(value: object) -> dict[str, AssistantConfig]:
         )
         if not command_valid:
             command = []
+        raw_type = raw.get("type")
+        assistant_type = raw_type if isinstance(raw_type, str) else "cli"
         assistants[name] = AssistantConfig(
-            type=str(raw.get("type", "cli")),
+            type=assistant_type,
             command=command,
         )
     return assistants
