@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import shlex
 from typing import Any
 
 from wasila.core.ports import CustomerGateway, OwnerGateway
-
+from wasila.gateways.wacli import WacliCustomerGateway
 from wasila.gateways.webhook import WebhookCustomerGateway, WebhookOwnerGateway
 
 
@@ -35,6 +36,9 @@ class HermesOwnerGateway(WebhookOwnerGateway):
 def build_customer_gateway(gateway_type: str, metadata: dict[str, str] | None = None) -> CustomerGateway:
     if gateway_type == "webhook":
         return WebhookCustomerGateway(metadata=metadata)
+    if gateway_type == "wacli":
+        command = (metadata or {}).get("command")
+        return WacliCustomerGateway(command=shlex.split(command) if command else None)
     raise ValueError(f"unsupported customer gateway type: {gateway_type}")
 
 
@@ -51,6 +55,7 @@ def build_owner_gateway(gateway_type: str, metadata: dict[str, str] | None = Non
 
 __all__ = [
     "WebhookCustomerGateway",
+    "WacliCustomerGateway",
     "WebhookOwnerGateway",
     "OpenClawOwnerGateway",
     "HermesOwnerGateway",
