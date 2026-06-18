@@ -14,6 +14,7 @@ Read these first:
 - `22-architecture-boundaries.md`: modular boundaries for maintainable implementation.
 - `23-crewai-alignment.md`: how Wasila maps to CrewAI features instead of replacing them.
 - `24-private-agent-gateway.md`: how Wasila safely delegates work to Hermes, OpenClaw, or another private assistant.
+- `25-whatsapp-wacli.md`: WhatsApp customer gateway setup via `wacli`.
 - `10-mvp-implementation-plan.md`: phase-by-phase implementation checklist.
 
 ## Core Contracts
