@@ -53,6 +53,11 @@ class WacliGatewayTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             WacliCustomerGateway().normalize({"id": "wamid.1", "text": "Halo Wasila"})
 
+    def test_normalize_skips_non_string_text_fallback(self):
+        event = WacliCustomerGateway().normalize({"from": "+628123", "text": {"bad": True}, "body": "fallback"})
+
+        self.assertEqual(event.message_text, "fallback")
+
     def test_send_reply_raises_runtime_error_on_failure(self):
         gateway = WacliCustomerGateway(command=["wacli-test"])
 

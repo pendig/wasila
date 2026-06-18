@@ -18,7 +18,7 @@ from wasila.config.models import (
     ProviderSettings,
 )
 from wasila.config.toml_io import dump_config, load_config
-from wasila.core.contracts import CustomerEvent
+from wasila.core.contracts import CustomerEvent, OrchestrationResult
 from wasila.core.workflow import _build_dedup_event_id
 from wasila.gateways import build_customer_gateway
 from wasila.gateways.webhook import WebhookDaemon
@@ -279,6 +279,7 @@ def handle_daemon_start(args: argparse.Namespace) -> None:
     def process(event_payload: dict[str, Any]) -> dict[str, Any]:
         event = gateway.normalize(event_payload)
         result = workflow.run(event)
+        _deliver_customer_reply(gateway, event, result)
         return {
             "customer_response": result.customer_response,
             "metadata": result.metadata_json,
@@ -288,6 +289,12 @@ def handle_daemon_start(args: argparse.Namespace) -> None:
 
     daemon = WebhookDaemon(handler=process, gateway=gateway, host=args.host, port=args.port)
     daemon.start()
+
+
+def _deliver_customer_reply(gateway: Any, event: CustomerEvent, result: OrchestrationResult) -> None:
+    sender = getattr(gateway, "send_reply", None)
+    if callable(sender) and result.customer_response:
+        sender(event.external_conversation_id, result.customer_response)
 
 
 def handle_sandbox_customer(args: argparse.Namespace) -> None:

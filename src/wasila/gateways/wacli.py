@@ -16,9 +16,12 @@ class WacliCustomerGateway(CustomerGateway):
         chat_id = str(payload.get("chat_id") or payload.get("from") or payload.get("phone") or "")
         if not chat_id:
             raise ValueError("wacli payload missing chat_id, from, or phone")
-        text = payload.get("text") or payload.get("message") or payload.get("body") or ""
-        if not isinstance(text, str):
-            text = ""
+        text = ""
+        for key in ("text", "message", "body"):
+            candidate = payload.get(key)
+            if isinstance(candidate, str) and candidate:
+                text = candidate
+                break
         event_id = payload.get("id") or payload.get("message_id")
         timestamp = payload.get("timestamp")
         return CustomerEvent(

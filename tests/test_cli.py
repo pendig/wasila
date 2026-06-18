@@ -7,10 +7,27 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from wasila.cli.main import main
+from wasila.cli.main import _deliver_customer_reply, main
+from wasila.core.contracts import CustomerEvent, OrchestrationResult
 
 
 class CliTests(unittest.TestCase):
+    def test_deliver_customer_reply_calls_gateway_sender_when_available(self):
+        class Gateway:
+            def __init__(self):
+                self.sent = []
+
+            def send_reply(self, chat_id, text):
+                self.sent.append((chat_id, text))
+
+        gateway = Gateway()
+        event = CustomerEvent(gateway="wacli", external_conversation_id="+628123")
+        result = OrchestrationResult(customer_response="Siap")
+
+        _deliver_customer_reply(gateway, event, result)
+
+        self.assertEqual(gateway.sent, [("+628123", "Siap")])
+
     def test_init_creates_config_database_and_runtime_dirs(self):
         with TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
