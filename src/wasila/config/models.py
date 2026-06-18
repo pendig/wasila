@@ -25,6 +25,12 @@ class GatewayConfig:
 
 
 @dataclass(slots=True)
+class AssistantConfig:
+    type: str
+    command: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
 class ProjectConfig:
     name: str
     profile: str
@@ -32,3 +38,4 @@ class ProjectConfig:
     provider: ProviderSettings
     customer_gateway: GatewayConfig
     owner_gateway: GatewayConfig
+    assistants: dict[str, AssistantConfig] = field(default_factory=dict)
