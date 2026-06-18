@@ -12,6 +12,8 @@ from wasila.core.contracts import (
     MemoryUpdate,
     OrchestrationResult,
     OwnerNotification,
+    PrivateAgentJob,
+    PrivateAgentResult,
     SkillCall,
     SkillResult,
 )
@@ -30,7 +32,14 @@ class Orchestrator(Protocol):
         """Run orchestration for a customer event."""
 
 
+class PrivateAgentAdapter(Protocol):
+    def run(self, job: PrivateAgentJob) -> PrivateAgentResult:
+        """Run a sanitized private assistant job."""
+        ...
+
+
 class Storage(Protocol):
+
     def initialize(self) -> None:
         """Create or migrate storage."""
 
@@ -130,8 +139,12 @@ class PolicyEngine(Protocol):
     def allow_owner_notification(self, notification: OwnerNotification) -> bool:
         """Return whether owner notification should be sent."""
 
+    def allow_private_agent_delegation(self, result: OrchestrationResult) -> bool:
+        """Return whether a private assistant should receive the sanitized job."""
+        ...
 
 class KnowledgeLoader(Protocol):
+
     def load_markdown(self) -> str:
         """Load business knowledge as Markdown."""
 
