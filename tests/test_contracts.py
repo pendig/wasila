@@ -1,6 +1,11 @@
 import unittest
 
-from wasila.core.contracts import CustomerEvent, OrchestrationResult
+from wasila.core.contracts import (
+    CustomerEvent,
+    OrchestrationResult,
+    private_agent_job_from_json,
+    private_agent_result_from_json,
+)
 
 
 class ContractTests(unittest.TestCase):
@@ -23,6 +28,73 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(result.owner_notifications, [])
         self.assertEqual(result.skill_results, [])
         self.assertEqual(result.agent_runs, [])
+
+    def test_private_agent_job_round_trips_documented_example(self):
+        data = {
+            "job_id": "job_001",
+            "customer_id": "cust_123",
+            "ticket_id": "tick_001",
+            "intent": "build_website",
+            "summary": "Customer wants a simple company website.",
+            "safe_context": {
+                "customer_message": "Saya mau bikin website company profile",
+                "business": "Pena Digital",
+                "constraints": ["reply in Indonesian", "ask for missing requirements"],
+            },
+            "forbidden": [
+                "do not expose internal memory",
+                "do not contact the customer directly",
+                "do not execute paid actions without owner approval",
+            ],
+        }
+
+        job = private_agent_job_from_json(data)
+
+        self.assertEqual(job.to_json(), data)
+
+    def test_private_agent_result_round_trips_documented_example(self):
+        data = {
+            "job_id": "job_001",
+            "status": "done",
+            "customer_reply": "Bisa kak. Untuk mulai, saya butuh nama bisnis, jumlah halaman, referensi desain, dan deadline.",
+            "owner_note": "Lead website baru. Perlu follow-up pricing.",
+            "actions_requested": [],
+        }
+
+        result = private_agent_result_from_json(data)
+
+        self.assertEqual(result.to_json(), data)
+
+    def test_private_agent_job_rejects_customer_channel_credentials(self):
+        keys = [
+            "access_token",
+            "accessToken",
+            "slack_token",
+            "apiKey",
+            "db-password",
+            "client_secret",
+            "api key",
+            "refresh.token",
+            "access/token",
+        ]
+        for key in keys:
+            data = {
+                "job_id": "job_001",
+                "customer_id": "cust_123",
+                "intent": "build_website",
+                "summary": "Customer wants a simple company website.",
+                "safe_context": {key: "nope"},
+                "forbidden": [],
+            }
+
+            with self.assertRaises(ValueError):
+                private_agent_job_from_json(data)
+
+    def test_private_agent_parsers_reject_non_dictionary_payloads(self):
+        with self.assertRaises(ValueError):
+            private_agent_job_from_json([])
+        with self.assertRaises(ValueError):
+            private_agent_result_from_json([])
 
 
 if __name__ == "__main__":
