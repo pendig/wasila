@@ -4,7 +4,13 @@ import json
 import tomllib
 from pathlib import Path
 
-from wasila.config.models import GatewayConfig, ProjectConfig, ProviderSettings, RuntimeSettings
+from wasila.config.models import (
+    AssistantConfig,
+    GatewayConfig,
+    ProjectConfig,
+    ProviderSettings,
+    RuntimeSettings,
+)
 
 
 def _as_metadata(value: object) -> dict[str, str]:
@@ -24,9 +30,36 @@ def _format_metadata(section_name: str, metadata: dict[str, str]) -> str:
 
     lines = [f"[{section_name}]", ""]
     for key, value in sorted(metadata.items()):
-        escaped = value.replace("\\", "\\\\").replace('"', '\\"')
-        lines.append(f"{key} = \"{escaped}\"")
+        escaped = _toml_string(value)
+        lines.append(f"{key} = {escaped}")
     return "\n".join(lines) + "\n"
+
+
+def _toml_string(value: str) -> str:
+    return json.dumps(value, ensure_ascii=False)
+
+
+def _as_assistants(value: object) -> dict[str, AssistantConfig]:
+    if not isinstance(value, dict):
+        return {}
+
+    assistants: dict[str, AssistantConfig] = {}
+    for name, raw in value.items():
+        if not isinstance(name, str) or not isinstance(raw, dict):
+            continue
+        command = raw.get("command", [])
+        command_valid = isinstance(command, list) and all(
+            isinstance(arg, str) for arg in command
+        )
+        if not command_valid:
+            command = []
+        raw_type = raw.get("type")
+        assistant_type = raw_type if isinstance(raw_type, str) else "cli"
+        assistants[name] = AssistantConfig(
+            type=assistant_type,
+            command=command,
+        )
+    return assistants
 
 
 def load_config(path: Path) -> ProjectConfig:
@@ -35,8 +68,12 @@ def load_config(path: Path) -> ProjectConfig:
     runtime = data.get("runtime", {})
     provider = data.get("provider", {})
     gateways = data.get("gateways", {})
-    customer_gateway = gateways.get("customer", {}) if isinstance(gateways, dict) else {}
-    owner_gateway = gateways.get("owner", {}) if isinstance(gateways, dict) else {}
+    if isinstance(gateways, dict):
+        customer_gateway = gateways.get("customer", {})
+        owner_gateway = gateways.get("owner", {})
+    else:
+        customer_gateway = {}
+        owner_gateway = {}
 
     return ProjectConfig(
         name=project.get("name", "my-customer-ai"),
@@ -60,6 +97,7 @@ def load_config(path: Path) -> ProjectConfig:
             type=owner_gateway.get("type", "webhook"),
             metadata=_as_metadata(owner_gateway.get("metadata", {})),
         ),
+        assistants=_as_assistants(data.get("assistants", {})),
     )
 
 
@@ -101,6 +139,14 @@ def dump_config(config: ProjectConfig) -> str:
         body += "\n\n" + customer_metadata.rstrip("\n")
     if owner_metadata:
         body += "\n\n" + owner_metadata.rstrip("\n")
+    if config.assistants:
+        for name, assistant in sorted(config.assistants.items()):
+            command = ", ".join(_toml_string(arg) for arg in assistant.command)
+            body += (
+                f"\n\n[assistants.{name}]\n"
+                f"type = {_toml_string(assistant.type)}\n"
+                f"command = [{command}]"
+            )
 
     return body + "\n"
 

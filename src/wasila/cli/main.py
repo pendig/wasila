@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shlex
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -10,7 +11,12 @@ from wasila import __version__
 from wasila.app import load_project
 from wasila.config.defaults import default_config
 from wasila.config.layers import load_config_with_layers
-from wasila.config.models import GatewayConfig, ProjectConfig, ProviderSettings
+from wasila.config.models import (
+    AssistantConfig,
+    GatewayConfig,
+    ProjectConfig,
+    ProviderSettings,
+)
 from wasila.config.toml_io import dump_config, load_config
 from wasila.core.contracts import CustomerEvent
 from wasila.core.workflow import _build_dedup_event_id
@@ -75,6 +81,35 @@ def build_parser() -> argparse.ArgumentParser:
     gateway_add.add_argument("type", choices=["webhook", "openclaw", "hermes"])
     gateway_add.add_argument("--metadata", action="append", default=[], help="KEY=VALUE metadata")
     gateway_add.set_defaults(func=handle_gateway_add)
+
+    assistant_parser = subparsers.add_parser(
+        "assistant",
+        help="Manage private assistant adapters.",
+    )
+    assistant_sub = assistant_parser.add_subparsers(
+        dest="assistant_command",
+        required=True,
+    )
+    assistant_add = assistant_sub.add_parser(
+        "add",
+        help="Add a private assistant adapter.",
+    )
+    assistant_add_sub = assistant_add.add_subparsers(
+        dest="assistant_type",
+        required=True,
+    )
+    assistant_add_cli = assistant_add_sub.add_parser(
+        "cli",
+        help="Add a CLI adapter.",
+    )
+    assistant_add_cli.add_argument("--name", required=True)
+    assistant_add_cli.add_argument("--command", required=True)
+    assistant_add_cli.set_defaults(func=handle_assistant_add_cli)
+    assistant_list = assistant_sub.add_parser(
+        "list",
+        help="List private assistant adapters.",
+    )
+    assistant_list.set_defaults(func=handle_assistant_list)
 
     daemon_parser = subparsers.add_parser("daemon", help="Start the local event daemon.")
     daemon_sub = daemon_parser.add_subparsers(dest="daemon_command", required=True)
@@ -177,6 +212,57 @@ def handle_gateway_add(args: argparse.Namespace) -> None:
         )
     _write_config(args.config, config)
     print(f"Updated {args.role} gateway in {args.config}")
+
+
+def handle_assistant_add_cli(args: argparse.Namespace) -> None:
+    if not _is_toml_bare_key(args.name):
+        raise SystemExit("assistant name must be ASCII letters, numbers, _ or -")
+
+    try:
+        command = shlex.split(args.command)
+    except ValueError as exc:
+        raise SystemExit(f"invalid assistant command: {exc}") from exc
+    if not command:
+        raise SystemExit("assistant command must not be empty")
+    if _command_has_secret(command):
+        raise SystemExit("assistant command must not contain secrets")
+
+    config = _load_or_default(args.config)
+    config.assistants[args.name] = AssistantConfig(type="cli", command=command)
+    _write_config(args.config, config)
+    print(f"Updated assistant {args.name} in {args.config}")
+
+
+def handle_assistant_list(args: argparse.Namespace) -> None:
+    config = _load_or_default(args.config)
+    if not config.assistants:
+        print("No assistants configured.")
+        return
+
+    for name, assistant in sorted(config.assistants.items()):
+        command = shlex.join(assistant.command)
+        print(f"{name}\t{assistant.type}\t{command}")
+
+
+def _is_toml_bare_key(value: str) -> bool:
+    allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-")
+    return bool(value) and all(char in allowed for char in value)
+
+
+def _command_has_secret(command: list[str]) -> bool:
+    secret_words = {"api_key", "apikey", "password", "secret", "token"}
+    for arg in command:
+        _, value = arg.split("=", 1) if "=" in arg else ("", arg)
+        if value.startswith(("-", "$")):
+            continue
+        if "/" in value or "\\" in value or "." in value:
+            continue
+        normalized = "".join(
+            char for char in value.lower() if char.isalnum() or char == "_"
+        )
+        if any(word in normalized for word in secret_words):
+            return True
+    return False
 
 
 def handle_daemon_start(args: argparse.Namespace) -> None:
