@@ -54,7 +54,7 @@ Later versions can replace or supplement this with retrieved knowledge chunks.
 
 ## OrchestrationResult
 
-Returned by the CrewAI runner.
+Returned by the local orchestration runner after optional private-assistant delegation.
 
 ```json
 {
@@ -76,6 +76,10 @@ Required MVP fields:
 - `owner_notifications`
 - `skill_results`
 - `agent_runs`
+
+Planned field after the private assistant adapter is implemented:
+
+- `private_agent_jobs`
 
 ## TicketUpdate
 
@@ -220,6 +224,52 @@ Persisted for debugging and traceability.
   "output_json": {}
 }
 ```
+
+## PrivateAgentJob
+
+Produced by Wasila when a customer request needs deeper private-assistant work. This is the trust boundary between public customer support and private assistants such as Hermes or OpenClaw.
+
+```json
+{
+  "job_id": "job_001",
+  "customer_id": "cust_123",
+  "ticket_id": "tick_001",
+  "intent": "build_website",
+  "summary": "Customer wants a simple company website.",
+  "safe_context": {
+    "customer_message": "Saya mau bikin website company profile",
+    "business": "Pena Digital",
+    "constraints": ["reply in Indonesian", "ask for missing requirements"]
+  },
+  "forbidden": [
+    "do not expose internal memory",
+    "do not contact the customer directly",
+    "do not execute paid actions without owner approval"
+  ]
+}
+```
+
+## PrivateAgentResult
+
+Returned by a private assistant adapter and filtered by Wasila before customer delivery.
+
+```json
+{
+  "job_id": "job_001",
+  "status": "done",
+  "customer_reply": "Bisa kak. Untuk mulai, saya butuh nama bisnis, jumlah halaman, referensi desain, dan deadline.",
+  "owner_note": "Lead website baru. Perlu follow-up pricing.",
+  "actions_requested": []
+}
+```
+
+Allowed MVP statuses:
+
+- `done`
+- `needs_owner`
+- `failed`
+
+Private assistants must not send customer replies themselves. Wasila owns final delivery and trace persistence.
 
 ## Contract Rule
 

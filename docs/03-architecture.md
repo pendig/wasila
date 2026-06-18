@@ -2,8 +2,9 @@
 
 ## Design Principles
 
-- CrewAI is the default orchestration core.
-- Wasila owns the product workflow, profile format, storage model, and gateway contracts.
+- Wasila is the customer-support airlock between public customers and private AI assistants.
+- CrewAI is the default in-process orchestration core.
+- Wasila owns the product workflow, profile format, storage model, gateway contracts, and private-assistant job contract.
 - The MVP should be small, but module boundaries should make extension natural.
 - Every customer interaction should be inspectable through memory, tickets, and agent run records.
 
@@ -14,7 +15,10 @@ Customer Gateway
 -> CustomerEvent
 -> Customer context loader
 -> Business knowledge loader
--> CrewAI orchestration
+-> Wasila frontdesk workflow
+-> CrewAI orchestration when local handling is enough
+-> Private assistant job when deeper work is needed
+-> Result filtering
 -> Skill execution when allowed
 -> Ticket and memory updates
 -> Customer Gateway response
@@ -39,8 +43,12 @@ wasila/
     startup_saas/
   gateways/
     webhook/
+    wacli/
     openclaw/
     hermes/
+  assistants/
+    cli/
+    http/
   providers/
     openai/
 ```
@@ -63,9 +71,10 @@ The profile should be declarative where possible, with code hooks only when a do
 
 ## Gateway Contract
 
-Wasila has two gateway roles:
+Wasila has three gateway roles:
 
-- Customer gateways receive customer conversations and send replies back to the customer channel.
+- Customer gateways receive public customer conversations and send replies back to the customer channel.
+- Private assistant gateways send sanitized jobs to trusted worker agents and return structured results.
 - Owner gateways deliver owner-facing summaries, alerts, and approval requests.
 
 A customer gateway converts external events into Wasila's internal `CustomerEvent`.
@@ -81,7 +90,7 @@ The internal event should contain:
 - `message_timestamp`
 - `metadata_json`
 
-The first customer gateway should support webhook input. Telegram and WhatsApp should become separate adapters that produce the same internal event shape.
+The first customer gateway should support webhook input. `wacli` should be the first WhatsApp adapter. Telegram and other channels should become separate adapters that produce the same internal event shape.
 
 An owner gateway should accept an `OwnerNotification` payload and deliver it to the configured owner channel.
 
@@ -95,17 +104,45 @@ The owner notification should contain:
 - `recommended_action`
 - `metadata_json`
 
-The first owner gateway should be webhook. OpenClaw and Hermes are planned owner gateway integrations.
+The first owner gateway should be webhook. OpenClaw and Hermes are planned owner gateway integrations. They are also planned private assistant integrations, but only behind the sanitized job contract.
 
 ## Orchestration Contract
 
-CrewAI should be the first runner. Wasila should still expose a small internal boundary:
+CrewAI should be the first local runner. Wasila should still expose a small internal boundary:
 
 ```text
 Orchestrator.run(event, context) -> OrchestrationResult
 ```
 
 This keeps the CLI, daemon, storage, and gateway modules independent from direct CrewAI details.
+
+## Private Assistant Contract
+
+Private assistants such as Hermes, OpenClaw, Codex, or another agent runtime are workers, not customer gateways. Wasila sends them only sanitized jobs and keeps the final customer reply path.
+
+```text
+PrivateAgent.run(job) -> PrivateAgentResult
+```
+
+A `PrivateAgentJob` should contain:
+
+- `job_id`
+- `customer_id`
+- `ticket_id` when relevant
+- `intent`
+- `summary`
+- `safe_context`
+- `forbidden`
+
+A `PrivateAgentResult` should contain:
+
+- `job_id`
+- `status`
+- `customer_reply`
+- `owner_note`
+- `actions_requested`
+
+Wasila must review or filter the result before sending anything to the customer. The private assistant should never receive direct customer-channel credentials or send messages to the customer directly.
 
 ## Knowledge Contract
 

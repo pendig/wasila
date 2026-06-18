@@ -8,7 +8,7 @@ The implementation should follow a ports-and-adapters shape: core workflow code 
 
 - Keep CrewAI as the default runner without leaking CrewAI details everywhere.
 - Keep SQLite replaceable in the future without changing agent behavior.
-- Keep customer gateways and owner gateways independent.
+- Keep customer gateways, private assistant gateways, and owner gateways independent.
 - Let profiles, providers, skills, and gateways register cleanly.
 - Keep policy checks deterministic and testable outside prompts.
 - Make sandbox and real gateways share the same execution path.
@@ -32,6 +32,7 @@ Suggested MVP interfaces:
 
 ```text
 Orchestrator
+PrivateAssistantGateway
 Storage
 CustomerGateway
 OwnerGateway
@@ -48,6 +49,10 @@ CustomerMemoryStore
 Runs the agent workflow and returns `OrchestrationResult`.
 
 CrewAI is the default adapter.
+
+### `PrivateAssistantGateway`
+
+Sends sanitized jobs to Hermes, OpenClaw, or another agent runtime and returns structured results. The first adapter should be CLI-based. Native plugins come later.
 
 ### `Storage`
 
@@ -105,18 +110,20 @@ The Wasila workflow should own the full customer interaction lifecycle:
 5. Load customer memory.
 6. Load business knowledge.
 7. Load open tickets and recent messages.
-8. Run orchestration.
-9. Execute allowed skills.
-10. Apply ticket updates.
-11. Apply approved memory updates.
-12. Persist agent runs and skill executions.
-13. Persist owner notifications.
-14. Deliver owner notifications when configured.
-15. Persist outbound customer response.
-16. Return response to customer gateway.
+8. Run local orchestration.
+9. Delegate a sanitized job to a private assistant when needed.
+10. Filter private assistant results.
+11. Execute allowed skills.
+12. Apply ticket updates.
+13. Apply approved memory updates.
+14. Persist agent runs, private assistant jobs, and skill executions.
+15. Persist owner notifications.
+16. Deliver owner notifications when configured.
+17. Persist outbound customer response.
+18. Return response to customer gateway.
 ```
 
-CrewAI should participate in step 8. It should not own the full lifecycle.
+CrewAI should participate in step 8. Private assistants should participate in step 9. Neither should own the full lifecycle.
 
 When CrewAI already provides a primitive for a step, prefer using it inside the relevant adapter. For example, use CrewAI agents/tasks/crews for orchestration, CrewAI tools for Wasila skills, CrewAI knowledge sources for business knowledge retrieval, and CrewAI Flows when the workflow lifecycle needs deterministic routing or persistence.
 
@@ -128,6 +135,7 @@ Registry categories:
 
 - Profiles.
 - Customer gateways.
+- Private assistant gateways.
 - Owner gateways.
 - Providers.
 - Skills.

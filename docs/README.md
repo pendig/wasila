@@ -13,6 +13,7 @@ Read these first:
 - `03-architecture.md`: high-level module layout and contracts.
 - `22-architecture-boundaries.md`: modular boundaries for maintainable implementation.
 - `23-crewai-alignment.md`: how Wasila maps to CrewAI features instead of replacing them.
+- `24-private-agent-gateway.md`: how Wasila safely delegates work to Hermes, OpenClaw, or another private assistant.
 - `10-mvp-implementation-plan.md`: phase-by-phase implementation checklist.
 
 ## Core Contracts
@@ -21,7 +22,7 @@ Use these before writing code:
 
 - `05-data-model.md`: SQLite, customer memory, business knowledge, and skill execution storage.
 - `11-configuration.md`: local config, runtime paths, provider config, and gateway config.
-- `12-event-contracts.md`: CustomerEvent, CustomerContext, OrchestrationResult, OwnerNotification, SkillCall, and SkillResult.
+- `12-event-contracts.md`: CustomerEvent, CustomerContext, OrchestrationResult, PrivateAgentJob, PrivateAgentResult, OwnerNotification, SkillCall, and SkillResult.
 - `20-idempotency.md`: stable event IDs and duplicate handling.
 
 ## Runtime Behavior
