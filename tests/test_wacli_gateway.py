@@ -42,6 +42,31 @@ class WacliGatewayTests(unittest.TestCase):
             timeout=15,
         )
 
+    def test_normalize_missing_timestamp_falls_back_to_now(self):
+        event = WacliCustomerGateway().normalize(
+            {"id": "wamid.1", "from": "+628123", "text": "Halo Wasila"}
+        )
+
+        self.assertTrue(event.message_timestamp.endswith("Z"))
+
+    def test_normalize_missing_chat_id_raises_value_error(self):
+        with self.assertRaises(ValueError):
+            WacliCustomerGateway().normalize({"id": "wamid.1", "text": "Halo Wasila"})
+
+    def test_send_reply_raises_runtime_error_on_failure(self):
+        gateway = WacliCustomerGateway(command=["wacli-test"])
+
+        with patch("wasila.gateways.wacli.subprocess.run") as run:
+            run.side_effect = subprocess.CalledProcessError(
+                returncode=1,
+                cmd=["wacli-test", "send"],
+                stderr="Error: connection failed",
+            )
+            with self.assertRaises(RuntimeError) as ctx:
+                gateway.send_reply("+628123", "Siap")
+
+        self.assertIn("wacli command failed with exit code 1: Error: connection failed", str(ctx.exception))
+
     def test_build_customer_gateway_supports_wacli(self):
         gateway = build_customer_gateway("wacli", {"command": "wacli-test"})
 
