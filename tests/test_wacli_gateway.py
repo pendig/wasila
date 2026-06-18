@@ -49,6 +49,11 @@ class WacliGatewayTests(unittest.TestCase):
 
         self.assertTrue(event.message_timestamp.endswith("Z"))
 
+    def test_normalize_preserves_zero_timestamp(self):
+        event = WacliCustomerGateway().normalize({"from": "+628123", "text": "Halo", "timestamp": 0})
+
+        self.assertEqual(event.message_timestamp, "0")
+
     def test_normalize_missing_chat_id_raises_value_error(self):
         with self.assertRaises(ValueError):
             WacliCustomerGateway().normalize({"id": "wamid.1", "text": "Halo Wasila"})
@@ -71,6 +76,26 @@ class WacliGatewayTests(unittest.TestCase):
                 gateway.send_reply("+628123", "Siap")
 
         self.assertIn("wacli command failed with exit code 1: Error: connection failed", str(ctx.exception))
+
+    def test_send_reply_raises_runtime_error_on_timeout(self):
+        gateway = WacliCustomerGateway(command=["wacli-test"])
+
+        with patch("wasila.gateways.wacli.subprocess.run") as run:
+            run.side_effect = subprocess.TimeoutExpired(cmd=["wacli-test", "send"], timeout=15)
+            with self.assertRaises(RuntimeError) as ctx:
+                gateway.send_reply("+628123", "Siap")
+
+        self.assertIn("wacli command timed out", str(ctx.exception))
+
+    def test_send_reply_raises_runtime_error_when_command_missing(self):
+        gateway = WacliCustomerGateway(command=["wacli-test"])
+
+        with patch("wasila.gateways.wacli.subprocess.run") as run:
+            run.side_effect = OSError("not found")
+            with self.assertRaises(RuntimeError) as ctx:
+                gateway.send_reply("+628123", "Siap")
+
+        self.assertIn("wacli command could not be executed", str(ctx.exception))
 
     def test_build_customer_gateway_supports_wacli(self):
         gateway = build_customer_gateway("wacli", {"command": "wacli-test"})

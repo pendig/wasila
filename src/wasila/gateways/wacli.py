@@ -29,7 +29,7 @@ class WacliCustomerGateway(CustomerGateway):
             external_conversation_id=chat_id,
             external_customer_id=chat_id,
             message_text=text,
-            message_timestamp=str(timestamp) if timestamp else utc_now_iso(),
+            message_timestamp=str(timestamp) if timestamp is not None else utc_now_iso(),
             id=str(event_id) if event_id is not None else None,
             metadata_json={"source": "wacli", "raw": payload},
         )
@@ -50,3 +50,7 @@ class WacliCustomerGateway(CustomerGateway):
         except subprocess.CalledProcessError as exc:
             stderr = exc.stderr.strip() if exc.stderr else ""
             raise RuntimeError(f"wacli command failed with exit code {exc.returncode}: {stderr}") from exc
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError("wacli command timed out") from exc
+        except OSError as exc:
+            raise RuntimeError("wacli command could not be executed") from exc
